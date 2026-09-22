@@ -259,7 +259,7 @@
 }
 
 .markdown-body pre {
-  background: #000000 !important;
+  background: var(--muted);
   border: 1px solid var(--border);
   border-radius: 0.75rem;
   padding: 0.9rem 1rem;
@@ -267,7 +267,7 @@
 }
 
 .dark .markdown-body pre {
-  background: #000000 !important;
+  background: #000000;
 }
 
 .markdown-body pre code {

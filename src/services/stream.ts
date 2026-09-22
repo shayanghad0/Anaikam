@@ -42,6 +42,7 @@ export async function streamChat(
       type: 'no_internet',
       message: err instanceof Error ? err.message : 'Could not reach the server',
     })
+    callbacks.onDone()
     return
   }
 
@@ -56,6 +57,7 @@ export async function streamChat(
       type = mapStatus(res.status)
     }
     callbacks.onError({ type, message, status: res.status })
+    callbacks.onDone()
     return
   }
 
@@ -64,80 +66,91 @@ export async function streamChat(
   let buffer = ''
   let sawDone = false
 
+  const processChunk = (chunk: string): boolean => {
+    const line = chunk.trim()
+    if (!line.startsWith('data:')) return true
+    const data = line.slice(5).trim()
+    if (data === '[DONE]') {
+      sawDone = true
+      return true
+    }
+    try {
+      const parsed = JSON.parse(data) as {
+        error?: { type: AIErrorPayload['type']; message: string; status?: number }
+        sources?: SearchSource[]
+        choices?: Array<{
+          delta?: {
+            content?: string
+            reasoning_content?: string
+            reasoning?: string
+          }
+          message?: {
+            content?: string
+            reasoning_content?: string
+            reasoning?: string
+          }
+        }>
+        usage?: {
+          prompt_tokens?: number
+          completion_tokens?: number
+          total_tokens?: number
+        }
+        model?: string
+      }
+      if (parsed.error) {
+        callbacks.onError(parsed.error)
+        callbacks.onDone()
+        return false
+      }
+      if (parsed.sources?.length && callbacks.onSources) {
+        callbacks.onSources(parsed.sources)
+      }
+      const choice = parsed.choices?.[0]
+      const reasoning =
+        choice?.delta?.reasoning_content ??
+        choice?.delta?.reasoning ??
+        choice?.message?.reasoning_content ??
+        choice?.message?.reasoning
+      if (reasoning && callbacks.onReasoning) callbacks.onReasoning(reasoning)
+      const delta = choice?.delta?.content ?? choice?.message?.content
+      if (delta) callbacks.onDelta(delta)
+      if (parsed.usage && callbacks.onUsage) {
+        callbacks.onUsage(
+          {
+            promptTokens: parsed.usage.prompt_tokens,
+            completionTokens: parsed.usage.completion_tokens,
+            totalTokens: parsed.usage.total_tokens,
+          },
+          parsed.model,
+        )
+      }
+    } catch {
+      /* skip */
+    }
+    return true
+  }
+
   try {
-    while (true) {
+    while (!sawDone) {
       const { done, value } = await reader.read()
-      if (done) break
+      if (done) {
+        buffer += decoder.decode()
+        break
+      }
       buffer += decoder.decode(value, { stream: true })
       const chunks = buffer.split('\n\n')
       buffer = chunks.pop() ?? ''
       for (const chunk of chunks) {
-        const line = chunk.trim()
-        if (!line.startsWith('data:')) continue
-        const data = line.slice(5).trim()
-        if (data === '[DONE]') {
-          sawDone = true
-          continue
-        }
-        try {
-          const parsed = JSON.parse(data) as {
-            error?: { type: AIErrorPayload['type']; message: string; status?: number }
-            sources?: SearchSource[]
-            choices?: Array<{
-              delta?: {
-                content?: string
-                reasoning_content?: string
-                reasoning?: string
-              }
-              message?: {
-                content?: string
-                reasoning_content?: string
-                reasoning?: string
-              }
-            }>
-            usage?: {
-              prompt_tokens?: number
-              completion_tokens?: number
-              total_tokens?: number
-            }
-            model?: string
-          }
-          if (parsed.error) {
-            callbacks.onError(parsed.error)
-            return
-          }
-          if (parsed.sources?.length && callbacks.onSources) {
-            callbacks.onSources(parsed.sources)
-          }
-          const choice = parsed.choices?.[0]
-          const reasoning =
-            choice?.delta?.reasoning_content ??
-            choice?.delta?.reasoning ??
-            choice?.message?.reasoning_content ??
-            choice?.message?.reasoning
-          if (reasoning && callbacks.onReasoning) callbacks.onReasoning(reasoning)
-          const delta = choice?.delta?.content ?? choice?.message?.content
-          if (delta) callbacks.onDelta(delta)
-          if (parsed.usage && callbacks.onUsage) {
-            callbacks.onUsage(
-              {
-                promptTokens: parsed.usage.prompt_tokens,
-                completionTokens: parsed.usage.completion_tokens,
-                totalTokens: parsed.usage.total_tokens,
-              },
-              parsed.model,
-            )
-          }
-        } catch {
-          /* skip */
-        }
+        if (!processChunk(chunk)) return
       }
+    }
+    if (!sawDone && buffer.trim()) {
+      processChunk(buffer)
     }
     if (signal.aborted) {
       callbacks.onDone()
       return
     }
-    if (!sawDone && buffer.includes('[DONE]')) sawDone = true
     callbacks.onDone()
   } catch (err) {
     if (signal.aborted) {
@@ -148,6 +161,7 @@ export async function streamChat(
       type: 'connection_failed',
       message: err instanceof Error ? err.message : 'Stream interrupted',
     })
+    callbacks.onDone()
   }
 }
 

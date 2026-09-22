@@ -147,37 +147,53 @@ aiRouter.post('/stream', async (req, res) => {
     const reader = upstream.body.getReader()
     const decoder = new TextDecoder()
     let buffer = ''
-    while (true) {
+    let upstreamDone = false
+
+    const processLine = (line: string): boolean => {
+      const trimmed = line.trim()
+      if (!trimmed || !trimmed.startsWith('data:')) return true
+      const dataStr = trimmed.slice(5).trim()
+      if (dataStr === '[DONE]') {
+        upstreamDone = true
+        res.write('data: [DONE]\n\n')
+        return true
+      }
+      try {
+        const parsed = JSON.parse(dataStr)
+        if (parsed.error) {
+          const e = parsed.error
+          const type: AIErrorType =
+            e.code === 'invalid_api_key' ? 'invalid_api_key'
+            : e.code === 'model_not_found' ? 'model_not_found'
+            : 'server_error'
+          sendError(type, e.message || 'Provider error')
+          return false
+        }
+        res.write(`data: ${dataStr}\n\n`)
+      } catch {
+        // skip malformed chunks
+      }
+      return true
+    }
+
+    while (!upstreamDone) {
       const { done, value } = await reader.read()
-      if (done) break
+      if (done) {
+        buffer += decoder.decode()
+        break
+      }
       buffer += decoder.decode(value, { stream: true })
       const lines = buffer.split('\n')
       buffer = lines.pop() ?? ''
       for (const line of lines) {
-        const trimmed = line.trim()
-        if (!trimmed || !trimmed.startsWith('data:')) continue
-        const dataStr = trimmed.slice(5).trim()
-        if (dataStr === '[DONE]') {
-          res.write('data: [DONE]\n\n')
-          continue
-        }
-        try {
-          const parsed = JSON.parse(dataStr)
-          if (parsed.error) {
-            const e = parsed.error
-            const type: AIErrorType =
-              e.code === 'invalid_api_key' ? 'invalid_api_key'
-              : e.code === 'model_not_found' ? 'model_not_found'
-              : 'server_error'
-            sendError(type, e.message || 'Provider error')
-            return
-          }
-          res.write(`data: ${dataStr}\n\n`)
-        } catch {
-          // skip malformed chunks
-        }
+        if (!processLine(line)) return
       }
     }
+
+    if (!upstreamDone && buffer.trim()) {
+      if (!processLine(buffer)) return
+    }
+
     res.write('data: [DONE]\n\n')
     res.end()
   } catch (err) {

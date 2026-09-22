@@ -31,16 +31,16 @@ function CodeBlock({ className, children, ...props }: React.HTMLAttributes<HTMLP
   }
 
   return (
-    <div className="group/code relative my-3 overflow-hidden rounded-xl border border-border bg-black">
-      <div className="flex items-center justify-between border-b border-white/10 bg-white/5 px-3 py-1.5">
-        <span className="text-[11px] font-medium uppercase tracking-wider text-white/50">
+    <div className="group/code relative my-3 overflow-hidden rounded-xl border border-border bg-muted/40 dark:bg-black">
+      <div className="flex items-center justify-between border-b border-border/60 bg-muted/30 px-3 py-1.5 dark:border-white/10 dark:bg-white/5">
+        <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground dark:text-white/50">
           {lang || 'code'}
         </span>
         <div className="flex gap-1 opacity-0 transition-opacity group-hover/code:opacity-100 focus-within/code:opacity-100">
           <button
             type="button"
             onClick={copy}
-            className="cursor-pointer rounded-md p-1.5 text-white/60 transition-colors hover:bg-white/10 hover:text-white"
+            className="cursor-pointer rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground dark:text-white/60 dark:hover:bg-white/10 dark:hover:text-white"
             aria-label="Copy code"
           >
             {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
@@ -48,7 +48,7 @@ function CodeBlock({ className, children, ...props }: React.HTMLAttributes<HTMLP
           <button
             type="button"
             onClick={download}
-            className="cursor-pointer rounded-md p-1.5 text-white/60 transition-colors hover:bg-white/10 hover:text-white"
+            className="cursor-pointer rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground dark:text-white/60 dark:hover:bg-white/10 dark:hover:text-white"
             aria-label="Download code"
           >
             <Download className="h-3.5 w-3.5" />

@@ -265,6 +265,8 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
           },
           onError: (error) => {
             setStreamingError(error)
+            setStreaming(false)
+            abortRef.current = null
             setActiveChat((current) => {
               if (!current || current.id !== chat.id) return current
               const messages = current.messages.map((m) =>
