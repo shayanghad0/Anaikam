@@ -8,7 +8,6 @@ import {
   Pencil,
   Trash2,
   X,
-  Upload,
   Download,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -32,11 +31,10 @@ import {
 import { useNavigate } from 'react-router-dom'
 import { useChat } from '@/contexts/ChatContext'
 import { useAuth } from '@/contexts/AuthContext'
-import { useToast } from '@/components/ui/toast'
 import { groupChatsByDate, formatDateTime } from '@/lib/utils'
 import { cn } from '@/lib/utils'
 import { ExportDialog } from '@/components/chat/MessageItem'
-import type { Chat, Message } from '@shared/types'
+import type { Chat } from '@shared/types'
 
 export function Sidebar({ onNavigateSettings }: { onNavigateSettings: () => void }) {
   const {
@@ -50,14 +48,11 @@ export function Sidebar({ onNavigateSettings }: { onNavigateSettings: () => void
     newChat,
     renameChat,
     deleteChat,
-    importChat,
     sidebarOpen,
     setSidebarOpen,
   } = useChat()
   const { logout, username } = useAuth()
-  const { toast } = useToast()
   const navigate = useNavigate()
-  const fileRef = React.useRef<HTMLInputElement>(null)
 
   const [renameTarget, setRenameTarget] = React.useState<{ id: string; title: string } | null>(null)
   const [renameValue, setRenameValue] = React.useState('')
@@ -65,22 +60,6 @@ export function Sidebar({ onNavigateSettings }: { onNavigateSettings: () => void
   const [exportChat, setExportChat] = React.useState<Chat | null>(null)
 
   const grouped = React.useMemo(() => groupChatsByDate(chats), [chats])
-
-  const handleImport = async (file: File) => {
-    try {
-      const text = await file.text()
-      const data = JSON.parse(text) as Partial<Chat> & { messages: Message[] }
-      if (!Array.isArray(data.messages)) throw new Error('Invalid format')
-      const chat = await importChat(data)
-      toast({ title: 'Imported', description: chat.title, variant: 'success' })
-    } catch (err) {
-      toast({
-        title: 'Import failed',
-        description: err instanceof Error ? err.message : 'Invalid JSON file',
-        variant: 'destructive',
-      })
-    }
-  }
 
   return (
     <>
@@ -139,7 +118,7 @@ export function Sidebar({ onNavigateSettings }: { onNavigateSettings: () => void
             <Input
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search chats…"
+              placeholder="Search chats..."
               className="h-8 pl-8 pr-8 text-sm"
               aria-label="Search chats"
             />
@@ -193,7 +172,7 @@ export function Sidebar({ onNavigateSettings }: { onNavigateSettings: () => void
                 ))}
               </div>
             ) : (
-              <p className="px-3 py-6 text-center text-sm text-muted-foreground">No chats match “{searchQuery}”</p>
+              <p className="px-3 py-6 text-center text-sm text-muted-foreground">No chats match "{searchQuery}"</p>
             )
           ) : grouped.length === 0 ? (
             <p className="px-3 py-6 text-center text-sm text-muted-foreground">No conversations yet</p>
@@ -266,25 +245,7 @@ export function Sidebar({ onNavigateSettings }: { onNavigateSettings: () => void
         </nav>
 
         <div className="border-t border-sidebar-border p-2">
-          <input
-            ref={fileRef}
-            type="file"
-            accept="application/json,.json"
-            className="hidden"
-            onChange={(e) => {
-              const f = e.target.files?.[0]
-              if (f) void handleImport(f)
-              e.target.value = ''
-            }}
-          />
-          <div className="grid grid-cols-2 gap-1">
-            <button
-              type="button"
-              onClick={() => fileRef.current?.click()}
-              className="flex cursor-pointer items-center gap-2 rounded-lg px-2.5 py-2 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-            >
-              <Upload className="h-4 w-4" /> Import
-            </button>
+          <div className="space-y-1">
             <button
               type="button"
               onClick={onNavigateSettings}
@@ -292,14 +253,14 @@ export function Sidebar({ onNavigateSettings }: { onNavigateSettings: () => void
             >
               <Settings className="h-4 w-4" /> Settings
             </button>
+            <button
+              type="button"
+              onClick={() => void logout()}
+              className="mt-1 flex w-full cursor-pointer items-center gap-2 rounded-lg px-2.5 py-2 text-sm text-destructive transition-colors hover:bg-destructive/10"
+            >
+              <LogOut className="h-4 w-4" /> Log out
+            </button>
           </div>
-          <button
-            type="button"
-            onClick={() => void logout()}
-            className="mt-1 flex w-full cursor-pointer items-center gap-2 rounded-lg px-2.5 py-2 text-sm text-destructive transition-colors hover:bg-destructive/10"
-          >
-            <LogOut className="h-4 w-4" /> Log out
-          </button>
         </div>
       </aside>
 
@@ -342,7 +303,7 @@ export function Sidebar({ onNavigateSettings }: { onNavigateSettings: () => void
           <DialogHeader>
             <DialogTitle>Delete chat?</DialogTitle>
             <DialogDescription>
-              “{deleteTarget?.title}” will be permanently removed. This cannot be undone.
+              "{deleteTarget?.title}" will be permanently removed. This cannot be undone.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>

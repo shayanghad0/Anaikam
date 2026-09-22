@@ -8,6 +8,7 @@ import { configRouter } from './routes-config.ts'
 import { chatsRouter } from './routes-chats.ts'
 import { attachmentsRouter } from './routes-attachments.ts'
 import { aiRouter } from './routes-ai.ts'
+import { backupRouter } from './routes-backup.ts'
 import { ROOT_DIR } from './db.ts'
 
 const PORT = Number(process.env.PORT || 3001)
@@ -26,6 +27,7 @@ app.use('/api/config', requireAuth, configRouter)
 app.use('/api/chats', requireAuth, chatsRouter)
 app.use('/api/attachments', requireAuth, attachmentsRouter)
 app.use('/api/ai', requireAuth, aiRouter)
+app.use('/api/backup', requireAuth, backupRouter)
 
 app.get('/api/health', (_req, res) => {
   res.json({ ok: true })

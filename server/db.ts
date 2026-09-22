@@ -17,7 +17,9 @@ export const DB_DIR = path.join(ROOT_DIR, 'database')
 export const CHATS_DIR = path.join(DB_DIR, 'chats')
 export const ATTACHMENTS_DIR = path.join(DB_DIR, 'attachments')
 const CONFIG_PATH = path.join(DB_DIR, 'config.json')
+export { CONFIG_PATH }
 const SESSIONS_PATH = path.join(DB_DIR, 'sessions.json')
+export { SESSIONS_PATH }
 
 interface SessionsFile {
   sessions: Record<string, { expiresAt: number }>
@@ -38,12 +40,14 @@ function readJson<T>(filePath: string, fallback: T): T {
     return fallback
   }
 }
+export { readJson }
 
 function writeJson(filePath: string, data: unknown): void {
   const tmp = `${filePath}.tmp`
   fs.writeFileSync(tmp, JSON.stringify(data, null, 2), 'utf-8')
   fs.renameSync(tmp, filePath)
 }
+export { writeJson }
 
 export function initDatabase(): void {
   ensureDirs()

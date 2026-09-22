@@ -10,6 +10,9 @@ import {
   Eye,
   EyeOff,
   CheckCircle2,
+  Database,
+  Upload,
+  Download,
 } from 'lucide-react'
 import { AppShell } from '@/components/layout/AppShell'
 import { Button } from '@/components/ui/button'
@@ -23,7 +26,7 @@ import { Spinner } from '@/components/ui/skeleton'
 import { useToast } from '@/components/ui/toast'
 import { useSettings } from '@/contexts/SettingsContext'
 import { useAuth } from '@/contexts/AuthContext'
-import { configApi } from '@/services/client'
+import { configApi, backupApi } from '@/services/client'
 import type { AppearanceSettings, ChatDisplaySettings } from '@shared/types'
 
 const ACCENTS = ['#7C3AED', '#2563EB', '#0891B2', '#059669', '#D97706', '#DB2777', '#DC2626', '#4F46E5']
@@ -38,6 +41,8 @@ export default function SettingsPage() {
   const [testing, setTesting] = React.useState(false)
   const [showKey, setShowKey] = React.useState(false)
   const [testResult, setTestResult] = React.useState<{ ok: boolean; message: string } | null>(null)
+  const [backupLoading, setBackupLoading] = React.useState(false)
+  const backupFileRef = React.useRef<HTMLInputElement>(null)
 
   const [username, setUsername] = React.useState('')
   const [currentPassword, setCurrentPassword] = React.useState('')
@@ -225,6 +230,9 @@ export default function SettingsPage() {
               </TabsTrigger>
               <TabsTrigger value="chat">
                 <MessageSquareText className="h-3.5 w-3.5" /> Chat
+              </TabsTrigger>
+              <TabsTrigger value="backup">
+                <Database className="h-3.5 w-3.5" /> Backup
               </TabsTrigger>
             </TabsList>
 
@@ -504,6 +512,53 @@ export default function SettingsPage() {
                     </SelectContent>
                   </Select>
                 </div>
+              </Section>
+            </TabsContent>
+
+            <TabsContent value="backup" className="space-y-5">
+              <Section icon={<Database className="h-4 w-4" />} title="Backup & Restore" description="Export your entire database (chats, config, attachments) to a JSON file, or restore from a previously exported backup.">
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <Button onClick={() => void backupApi.export()} disabled={backupLoading}>
+                    <Download className="h-4 w-4" />
+                    {backupLoading ? 'Exporting…' : 'Export Database'}
+                  </Button>
+                  <label className="relative">
+                    <input
+                      ref={backupFileRef}
+                      type="file"
+                      accept="application/json,.json"
+                      className="hidden"
+                      onChange={async (e) => {
+                        const f = e.target.files?.[0]
+                        if (!f) return
+                        e.target.value = ''
+                        setBackupLoading(true)
+                        try {
+                          const result = await backupApi.import(f)
+                          toast({ title: 'Imported', description: `${result.chatsRestored} chats restored`, variant: 'success' })
+                        } catch (err) {
+                          toast({
+                            title: 'Import failed',
+                            description: err instanceof Error ? err.message : 'Invalid backup file',
+                            variant: 'destructive',
+                          })
+                        } finally {
+                          setBackupLoading(false)
+                        }
+                      }}
+                    />
+                    <Button
+                      variant="outline"
+                      onClick={() => backupFileRef.current?.click()}
+                      disabled={backupLoading}
+                      className="w-full"
+                    >
+                      <Upload className="h-4 w-4" />
+                      {backupLoading ? 'Importing…' : 'Import Database'}
+                    </Button>
+                  </label>
+                </div>
+                <p className="text-xs text-muted-foreground">Importing will replace all existing data with the contents of the backup file.</p>
               </Section>
             </TabsContent>
           </Tabs>

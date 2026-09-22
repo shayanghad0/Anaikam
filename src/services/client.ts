@@ -51,6 +51,27 @@ export const attachmentsApi = {
   url: (id: string) => `/api/attachments/${id}`,
 }
 
+export const backupApi = {
+  export: async (): Promise<void> => {
+    const res = await fetch('/api/backup/export', { credentials: 'include' })
+    if (!res.ok) throw new Error('Export failed')
+    const blob = await res.blob()
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    const filename = res.headers.get('content-disposition')?.match(/filename="([^"]+)"/)?.[1] ?? 'backup.json'
+    a.download = filename
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+    URL.revokeObjectURL(url)
+  },
+  import: async (file: File): Promise<{ ok: boolean; chatsRestored: number; attachmentsRestored: number }> => {
+    const text = await file.text()
+    return api.post('/api/backup/import', { file: text })
+  },
+}
+
 function fileToBase64(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader()
