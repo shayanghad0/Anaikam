@@ -1,5 +1,5 @@
 import * as React from 'react'
-import { useParams } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
 import { AppShell } from '@/components/layout/AppShell'
 import { ChatHeader } from '@/components/layout/ChatHeader'
 import { MessageList, MessageListSkeleton } from '@/components/chat/MessageList'
@@ -12,6 +12,7 @@ import type { Chat } from '@shared/types'
 export default function ChatPage() {
   const { activeChat, loadingChat, selectChat, streaming } = useChat()
   const { chatId } = useParams<{ chatId: string }>()
+  const navigate = useNavigate()
   const [exportTarget, setExportTarget] = React.useState<Chat | null>(null)
 
   React.useEffect(() => {
@@ -24,9 +25,9 @@ export default function ChatPage() {
     if (!activeChat) return
     const path = `/c/${activeChat.id}`
     if (window.location.pathname !== path) {
-      window.history.replaceState(null, '', path)
+      navigate(path, { replace: true })
     }
-  }, [activeChat?.id])
+  }, [activeChat?.id, navigate])
 
   const showWelcome = !activeChat || (activeChat.messages.length === 0 && !loadingChat)
 

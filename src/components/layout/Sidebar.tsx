@@ -29,6 +29,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import { useNavigate } from 'react-router-dom'
 import { useChat } from '@/contexts/ChatContext'
 import { useAuth } from '@/contexts/AuthContext'
 import { useToast } from '@/components/ui/toast'
@@ -47,7 +48,6 @@ export function Sidebar({ onNavigateSettings }: { onNavigateSettings: () => void
     searchResults,
     searching,
     newChat,
-    selectChat,
     renameChat,
     deleteChat,
     importChat,
@@ -56,6 +56,7 @@ export function Sidebar({ onNavigateSettings }: { onNavigateSettings: () => void
   } = useChat()
   const { logout, username } = useAuth()
   const { toast } = useToast()
+  const navigate = useNavigate()
   const fileRef = React.useRef<HTMLInputElement>(null)
 
   const [renameTarget, setRenameTarget] = React.useState<{ id: string; title: string } | null>(null)
@@ -121,7 +122,14 @@ export function Sidebar({ onNavigateSettings }: { onNavigateSettings: () => void
         </div>
 
         <div className="px-3 pb-2 space-y-2">
-          <Button className="w-full justify-start gap-2" onClick={() => void newChat()}>
+          <Button
+            className="w-full justify-start gap-2"
+            onClick={() => {
+              void newChat().then((chat) => {
+                if (chat) navigate(`/c/${chat.id}`)
+              })
+            }}
+          >
             <Plus className="h-4 w-4" />
             New chat
           </Button>
@@ -170,7 +178,10 @@ export function Sidebar({ onNavigateSettings }: { onNavigateSettings: () => void
                   <button
                     key={r.id}
                     type="button"
-                    onClick={() => void selectChat(r.id)}
+                    onClick={() => {
+                      setSidebarOpen(false)
+                      navigate(`/c/${r.id}`)
+                    }}
                     className={cn(
                       'w-full cursor-pointer rounded-lg px-2.5 py-2 text-left transition-colors hover:bg-muted',
                       activeChat?.id === r.id && 'bg-muted',
@@ -202,7 +213,10 @@ export function Sidebar({ onNavigateSettings }: { onNavigateSettings: () => void
                   >
                     <button
                       type="button"
-                      onClick={() => void selectChat(chat.id)}
+                      onClick={() => {
+                        setSidebarOpen(false)
+                        navigate(`/c/${chat.id}`)
+                      }}
                       className="min-w-0 flex-1 cursor-pointer truncate rounded-lg px-2.5 py-2 text-left text-sm"
                       title={chat.title}
                     >

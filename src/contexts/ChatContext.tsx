@@ -137,7 +137,6 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
 
   const newChat = React.useCallback(async () => {
     abortRef.current?.abort()
-    commitChat(null)
     setStreamingError(null)
     setSidebarOpen(false)
     const chat = await chatsApi.create('New chat')
