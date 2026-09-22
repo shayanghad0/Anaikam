@@ -160,31 +160,50 @@ export function MessageItem({
           </div>
         ) : (
           <div className="w-full">
-            {message.reasoning ? (
-              <ReasoningBlock reasoning={message.reasoning} isStreaming={isStreamingFinal && streaming} />
+            {message.reasoning || (isStreamingFinal && streaming && message.thinkingMode && message.thinkingMode !== 'off') ? (
+              <ReasoningBlock
+                reasoning={message.reasoning ?? ''}
+                isStreaming={isStreamingFinal && streaming}
+                mode={message.thinkingMode && message.thinkingMode !== 'off' ? message.thinkingMode : undefined}
+                durationMs={
+                  isStreamingFinal && streaming && !message.reasoning ? undefined : message.thinkDurationMs
+                }
+              />
             ) : null}
             {emptyStream ? (
               <div className="flex items-center gap-2 py-1 text-sm text-muted-foreground">
                 <span className="typing-dot" />
                 <span className="typing-dot" style={{ animationDelay: '150ms' }} />
                 <span className="typing-dot" style={{ animationDelay: '300ms' }} />
-                <span className="ml-1">Thinking…</span>
+                <span className="ml-1">
+                  {message.thinkingMode === 'deep'
+                    ? 'Deep thinking…'
+                    : message.thinkingMode === 'normal'
+                      ? 'Normal thinking…'
+                      : 'Thinking…'}
+                </span>
               </div>
             ) : (
               <div className={cn(isStreamingFinal && 'streaming-caret')}>
                 <Markdown content={message.content} />
               </div>
             )}
-            {isAssistant && (message.usedSearch || message.usedDeepThink) ? (
+            {isAssistant &&
+            (message.usedSearch || message.usedDeepThink || (message.thinkingMode && message.thinkingMode !== 'off')) ? (
               <div className="mt-1.5 flex flex-wrap gap-2">
                 {message.usedSearch ? (
                   <span className="inline-flex items-center gap-1 rounded-full border border-border bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">
                     <Globe className="h-3 w-3" /> Searched web
                   </span>
                 ) : null}
-                {message.usedDeepThink ? (
+                {message.thinkingMode === 'normal' ? (
                   <span className="inline-flex items-center gap-1 rounded-full border border-border bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">
-                    <Brain className="h-3 w-3" /> Deep think
+                    <Brain className="h-3 w-3" /> Normal thinking
+                  </span>
+                ) : null}
+                {(message.thinkingMode === 'deep' || (!message.thinkingMode && message.usedDeepThink)) ? (
+                  <span className="inline-flex items-center gap-1 rounded-full border border-border bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">
+                    <Brain className="h-3 w-3" /> Deep thinking
                   </span>
                 ) : null}
               </div>
@@ -315,19 +334,54 @@ function ActionButton({
   )
 }
 
-function ReasoningBlock({ reasoning, isStreaming }: { reasoning: string; isStreaming: boolean }) {
+function ReasoningBlock({
+  reasoning,
+  isStreaming,
+  mode,
+  durationMs,
+}: {
+  reasoning: string
+  isStreaming: boolean
+  mode?: 'normal' | 'deep'
+  durationMs?: number
+}) {
   const [open, setOpen] = React.useState(false)
   const wasStreaming = React.useRef(isStreaming)
+  const [liveSecs, setLiveSecs] = React.useState(0)
+  const thinkStartRef = React.useRef<number | null>(null)
 
   React.useEffect(() => {
     if (isStreaming) {
       wasStreaming.current = true
       setOpen(true)
+      if (thinkStartRef.current == null) thinkStartRef.current = Date.now()
     } else if (wasStreaming.current) {
       wasStreaming.current = false
       setOpen(false)
+      if (thinkStartRef.current != null && durationMs == null) {
+        setLiveSecs(Math.max(1, Math.round((Date.now() - thinkStartRef.current) / 1000)))
+      }
     }
+  }, [isStreaming, durationMs])
+
+  React.useEffect(() => {
+    if (!isStreaming) return
+    const id = window.setInterval(() => {
+      if (thinkStartRef.current != null) {
+        setLiveSecs(Math.round((Date.now() - thinkStartRef.current) / 1000))
+      }
+    }, 250)
+    return () => window.clearInterval(id)
   }, [isStreaming])
+
+  const secs = durationMs != null ? Math.round(durationMs / 1000) : liveSecs
+  const title = mode
+    ? isStreaming
+      ? `${secs}s · ${mode} thinking…`
+      : `${secs}s · ${mode} thinking`
+    : isStreaming
+      ? 'Thinking…'
+      : 'Thought process'
 
   return (
     <div className="mb-2 overflow-hidden rounded-xl border border-border/80 bg-muted/30">
@@ -338,12 +392,12 @@ function ReasoningBlock({ reasoning, isStreaming }: { reasoning: string; isStrea
         className="flex w-full cursor-pointer items-center gap-2 px-3 py-2 text-left text-xs text-muted-foreground transition-colors hover:text-foreground"
       >
         <Brain className="h-3.5 w-3.5 shrink-0 text-primary" />
-        <span className="flex-1 font-medium">{isStreaming ? 'Thinking…' : 'Thought process'}</span>
+        <span className="flex-1 font-medium">{title}</span>
         <ChevronDown className={cn('h-3.5 w-3.5 transition-transform', !open && '-rotate-90')} />
       </button>
       {open ? (
         <div className="whitespace-pre-wrap border-t border-border/80 px-3 py-2.5 text-xs leading-relaxed text-muted-foreground">
-          {reasoning}
+          {reasoning || (isStreaming ? 'Thinking…' : '')}
         </div>
       ) : null}
     </div>

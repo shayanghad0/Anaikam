@@ -1,13 +1,21 @@
-import type { AIErrorPayload, Message, SearchSource, TokenUsage } from '@shared/types'
+import type { AIErrorPayload, Message, SearchSource, ThinkMode, TokenUsage } from '@shared/types'
 
 export interface StreamOptions {
   webSearch?: boolean
-  deepThink?: boolean
+  thinkingMode?: ThinkMode
+}
+
+export interface ThinkingMeta {
+  mode: ThinkMode
+  durationMs: number
+  startedAt?: number
+  done?: boolean
 }
 
 export interface StreamCallbacks {
   onDelta: (text: string) => void
   onReasoning?: (text: string) => void
+  onThinking?: (meta: ThinkingMeta) => void
   onSources?: (sources: SearchSource[]) => void
   onUsage?: (usage: TokenUsage, model?: string) => void
   onError: (error: AIErrorPayload) => void
@@ -29,7 +37,8 @@ export async function streamChat(
       body: JSON.stringify({
         messages,
         webSearch: Boolean(options.webSearch),
-        deepThink: Boolean(options.deepThink),
+        thinkingMode: options.thinkingMode ?? 'off',
+        deepThink: options.thinkingMode === 'deep',
       }),
       signal,
     })
@@ -78,6 +87,7 @@ export async function streamChat(
       const parsed = JSON.parse(data) as {
         error?: { type: AIErrorPayload['type']; message: string; status?: number }
         sources?: SearchSource[]
+        thinking?: { mode?: ThinkMode; durationMs?: number; startedAt?: number; done?: boolean }
         choices?: Array<{
           delta?: {
             content?: string
@@ -101,6 +111,14 @@ export async function streamChat(
         callbacks.onError(parsed.error)
         callbacks.onDone()
         return false
+      }
+      if (parsed.thinking && callbacks.onThinking) {
+        callbacks.onThinking({
+          mode: parsed.thinking.mode ?? 'normal',
+          durationMs: parsed.thinking.durationMs ?? 0,
+          startedAt: parsed.thinking.startedAt,
+          done: parsed.thinking.done,
+        })
       }
       if (parsed.sources?.length && callbacks.onSources) {
         callbacks.onSources(parsed.sources)

@@ -1,17 +1,29 @@
 import * as React from 'react'
-import { Paperclip, Send, Square, X, FileText, Sparkles, Globe, Brain } from 'lucide-react'
+import { Paperclip, Send, Square, X, FileText, Sparkles, Globe, Brain, Check } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { useChat } from '@/contexts/ChatContext'
 import { useSettings } from '@/contexts/SettingsContext'
 import { attachmentsApi } from '@/services/client'
 import { cn, formatBytes } from '@/lib/utils'
 import { useToast } from '@/components/ui/toast'
-import type { AttachmentMeta } from '@shared/types'
+import type { AttachmentMeta, ThinkMode } from '@shared/types'
 
 const ACCEPT = 'image/png,image/jpeg,image/gif,image/webp,application/pdf,text/plain,text/markdown,.md,.txt,.csv,.json'
 
+const THINK_OPTIONS: Array<{ mode: ThinkMode; label: string; hint: string }> = [
+  { mode: 'off', label: 'Off', hint: 'Answer immediately' },
+  { mode: 'normal', label: 'Normal thinking', hint: '30–60s · brief reasoning' },
+  { mode: 'deep', label: 'Deep thinking', hint: '30s–5m · full reasoning' },
+]
+
 export function Composer() {
-  const { sendMessage, streaming, stopGeneration, webSearch, deepThink, setWebSearch, setDeepThink } = useChat()
+  const { sendMessage, streaming, stopGeneration, webSearch, thinkMode, setWebSearch, setThinkMode } = useChat()
   const { config } = useSettings()
   const { toast } = useToast()
   const [value, setValue] = React.useState('')
@@ -130,12 +142,48 @@ export function Composer() {
             label="Search the web"
             icon={<Globe className="h-4 w-4" />}
           />
-          <ModeToggle
-            active={deepThink}
-            onClick={() => setDeepThink(!deepThink)}
-            label="Deep thinking"
-            icon={<Brain className="h-4 w-4" />}
-          />
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                aria-label="Thinking mode"
+                aria-haspopup="menu"
+                title={
+                  thinkMode === 'off'
+                    ? 'Thinking off'
+                    : thinkMode === 'normal'
+                      ? 'Normal thinking (30–60s)'
+                      : 'Deep thinking (30s–5m)'
+                }
+                className={cn(
+                  'cursor-pointer rounded-lg p-2 transition-colors',
+                  thinkMode !== 'off'
+                    ? 'bg-primary/15 text-primary'
+                    : 'text-muted-foreground hover:bg-muted hover:text-foreground',
+                )}
+              >
+                <Brain className="h-4 w-4" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-64 p-1.5">
+              <p className="px-2 py-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                Thinking mode
+              </p>
+              {THINK_OPTIONS.map((opt) => (
+                <DropdownMenuItem
+                  key={opt.mode}
+                  onClick={() => setThinkMode(opt.mode)}
+                  className={cn('flex flex-col items-start gap-0.5 py-2', thinkMode === opt.mode && 'bg-muted')}
+                >
+                  <span className="flex w-full items-center justify-between gap-2">
+                    <span className="font-medium">{opt.label}</span>
+                    {thinkMode === opt.mode ? <Check className="h-3.5 w-3.5 text-primary" /> : null}
+                  </span>
+                  <span className="text-[11px] text-muted-foreground">{opt.hint}</span>
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
 
           <textarea
             ref={textareaRef}
@@ -178,7 +226,7 @@ export function Composer() {
               <Sparkles className="mr-1 inline h-3 w-3 align-[-2px] text-primary" />
               {config?.model ? `${config.model}` : 'Configure a model in Settings'}
               {webSearch ? ' · Search' : ''}
-              {deepThink ? ' · Deep Think' : ''}
+              {thinkMode === 'normal' ? ' · Normal thinking' : thinkMode === 'deep' ? ' · Deep thinking' : ''}
               {' · Enter to send, Shift+Enter for newline'}
             </>
           )}

@@ -74,6 +74,7 @@ export default function SettingsPage() {
     enableKaTeX: true,
     webSearch: false,
     deepThink: false,
+    thinkMode: 'off',
   })
 
   React.useEffect(() => {
@@ -470,7 +471,6 @@ export default function SettingsPage() {
                     ['enableMermaid', 'Enable Mermaid', 'Render ```mermaid diagrams'],
                     ['enableKaTeX', 'Enable KaTeX', 'Render math expressions'],
                     ['webSearch', 'Web search by default', 'Start new messages with search mode on'],
-                    ['deepThink', 'Deep thinking by default', 'Start new messages with deep think on'],
                   ] as Array<[keyof ChatDisplaySettings, string, string]>
                 ).map(([key, label, desc]) => (
                   <div key={key} className="flex items-center justify-between rounded-xl border border-border p-3">
@@ -479,12 +479,31 @@ export default function SettingsPage() {
                       <p className="text-xs text-muted-foreground">{desc}</p>
                     </div>
                     <Switch
-                      checked={chat[key]}
+                      checked={Boolean(chat[key])}
                       onCheckedChange={(v) => setChat({ ...chat, [key]: v })}
                       aria-label={label}
                     />
                   </div>
                 ))}
+                <div className="flex items-center justify-between rounded-xl border border-border p-3">
+                  <div className="pr-4">
+                    <p className="text-sm font-medium">Default thinking mode</p>
+                    <p className="text-xs text-muted-foreground">Off answers instantly · Normal 30–60s · Deep 30s–5m</p>
+                  </div>
+                  <Select
+                    value={chat.thinkMode}
+                    onValueChange={(v) => setChat({ ...chat, thinkMode: v as ChatDisplaySettings['thinkMode'] })}
+                  >
+                    <SelectTrigger className="w-40" aria-label="Default thinking mode">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="off">Off</SelectItem>
+                      <SelectItem value="normal">Normal thinking</SelectItem>
+                      <SelectItem value="deep">Deep thinking</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
               </Section>
             </TabsContent>
           </Tabs>

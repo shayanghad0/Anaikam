@@ -11,6 +11,7 @@ import type {
   Message,
   SearchResult,
   SearchSource,
+  ThinkMode,
 } from '@shared/types'
 
 interface ChatContextValue {
@@ -25,11 +26,11 @@ interface ChatContextValue {
   searching: boolean
   sidebarOpen: boolean
   webSearch: boolean
-  deepThink: boolean
+  thinkMode: ThinkMode
   setSidebarOpen: (open: boolean) => void
   setSearchQuery: (q: string) => void
   setWebSearch: (v: boolean) => void
-  setDeepThink: (v: boolean) => void
+  setThinkMode: (mode: ThinkMode) => void
   refreshChats: () => Promise<void>
   newChat: () => Promise<Chat | null>
   selectChat: (id: string) => Promise<void>
@@ -61,20 +62,21 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
   const [searching, setSearching] = React.useState(false)
   const [sidebarOpen, setSidebarOpen] = React.useState(false)
   const [webSearch, setWebSearchRaw] = React.useState(false)
-  const [deepThink, setDeepThinkRaw] = React.useState(false)
+  const [thinkMode, setThinkModeRaw] = React.useState<ThinkMode>('off')
 
   const abortRef = React.useRef<AbortController | null>(null)
   const activeChatRef = React.useRef<Chat | null>(null)
   activeChatRef.current = activeChat
   const webSearchRef = React.useRef(webSearch)
-  const deepThinkRef = React.useRef(deepThink)
+  const thinkModeRef = React.useRef(thinkMode)
   webSearchRef.current = webSearch
-  deepThinkRef.current = deepThink
+  thinkModeRef.current = thinkMode
 
   React.useEffect(() => {
     setWebSearchRaw(Boolean(chatSettings.webSearch))
-    setDeepThinkRaw(Boolean(chatSettings.deepThink))
-  }, [chatSettings.webSearch, chatSettings.deepThink])
+    const mode = chatSettings.thinkMode
+    setThinkModeRaw(mode === 'normal' || mode === 'deep' || mode === 'off' ? mode : chatSettings.deepThink ? 'deep' : 'off')
+  }, [chatSettings.webSearch, chatSettings.thinkMode, chatSettings.deepThink])
 
   const setWebSearch = React.useCallback(
     (v: boolean) => {
@@ -84,10 +86,10 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     [updateSettings],
   )
 
-  const setDeepThink = React.useCallback(
-    (v: boolean) => {
-      setDeepThinkRaw(v)
-      void updateSettings({ chat: { deepThink: v } })
+  const setThinkMode = React.useCallback(
+    (mode: ThinkMode) => {
+      setThinkModeRaw(mode)
+      void updateSettings({ chat: { thinkMode: mode, deepThink: mode === 'deep' } })
     },
     [updateSettings],
   )
@@ -228,10 +230,11 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       setStreamingError(null)
 
       const useSearch = webSearchRef.current
-      const useThink = deepThinkRef.current
+      const useThink = thinkModeRef.current
       let acc = ''
       let reason = ''
       let sources: SearchSource[] | undefined
+      let thinkDurationMs: number | undefined
 
       const patchAssistant = (patch: Partial<Message>) => {
         setActiveChat((current) => {
@@ -255,6 +258,21 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
             reason += text
             patchAssistant({ reasoning: reason })
           },
+          onThinking: (meta) => {
+            if (meta.done) {
+              thinkDurationMs = meta.durationMs
+              patchAssistant({
+                thinkingMode: meta.mode,
+                thinkDurationMs: meta.durationMs,
+              })
+            } else {
+              patchAssistant({
+                thinkingMode: meta.mode,
+                ...(thinkDurationMs ? {} : { thinkDurationMs: meta.durationMs }),
+              })
+              if (!thinkDurationMs) thinkDurationMs = meta.durationMs
+            }
+          },
           onSources: (hits) => {
             sources = hits
             patchAssistant({ sources: hits })
@@ -270,7 +288,14 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
               if (!current || current.id !== chat.id) return current
               const messages = current.messages.map((m) =>
                 m.id === appendToMessageId
-                  ? { ...m, content: acc || m.content, error: true, reasoning: reason || m.reasoning }
+                  ? {
+                      ...m,
+                      content: acc || m.content,
+                      error: true,
+                      reasoning: reason || m.reasoning,
+                      thinkingMode: m.thinkingMode ?? (useThink !== 'off' ? useThink : undefined),
+                      thinkDurationMs: m.thinkDurationMs ?? thinkDurationMs,
+                    }
                   : m,
               )
               if (!acc) {
@@ -295,7 +320,9 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
                         timestamp: m.timestamp || Date.now(),
                         reasoning: reason || m.reasoning,
                         usedSearch: useSearch,
-                        usedDeepThink: useThink,
+                        usedDeepThink: useThink === 'deep',
+                        thinkingMode: m.thinkingMode ?? useThink,
+                        thinkDurationMs: m.thinkDurationMs ?? thinkDurationMs,
                         sources: sources ?? m.sources,
                       }
                     : m,
@@ -306,7 +333,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
             })()
           },
         },
-        { webSearch: useSearch, deepThink: useThink },
+        { webSearch: useSearch, thinkingMode: useThink },
       )
     },
     [persist, commitChat],
@@ -349,7 +376,8 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
         content: '',
         timestamp: now,
         usedSearch: webSearchRef.current,
-        usedDeepThink: deepThinkRef.current,
+        usedDeepThink: thinkModeRef.current === 'deep',
+        thinkingMode: thinkModeRef.current,
       }
 
       const nextMessages = [...chat.messages, userMsg, assistantMsg]
@@ -396,7 +424,8 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       content: '',
       timestamp: Date.now(),
       usedSearch: webSearchRef.current,
-      usedDeepThink: deepThinkRef.current,
+      usedDeepThink: thinkModeRef.current === 'deep',
+      thinkingMode: thinkModeRef.current,
     }
     const nextChat: Chat = { ...chat, messages: [...messages, assistantMsg] }
     commitChat(nextChat)
@@ -422,7 +451,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     const appendTo = last.id
     const baseContent = last.content
     const useSearch = webSearchRef.current
-    const useThink = deepThinkRef.current
+    const useThink = thinkModeRef.current
     setStreaming(true)
     setStreamingError(null)
     const controller = new AbortController()
@@ -465,16 +494,17 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
             if (!current || current.id !== chat.id) return current
             return {
               ...current,
-              messages: current.messages.map((m) =>
-                m.id === appendTo
-                  ? {
-                      ...m,
-                      reasoning: reason || m.reasoning,
-                      usedSearch: useSearch || m.usedSearch,
-                      usedDeepThink: useThink || m.usedDeepThink,
-                    }
-                  : m,
-              ),
+                messages: current.messages.map((m) =>
+                  m.id === appendTo
+                    ? {
+                        ...m,
+                        reasoning: reason || m.reasoning,
+                        usedSearch: useSearch || m.usedSearch,
+                        usedDeepThink: useThink === 'deep' || m.usedDeepThink,
+                        thinkingMode: m.thinkingMode ?? useThink,
+                      }
+                    : m,
+                ),
             }
           })
           const current = activeChatRef.current
@@ -487,7 +517,8 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
                       ...m,
                       reasoning: reason || m.reasoning,
                       usedSearch: useSearch || m.usedSearch,
-                      usedDeepThink: useThink || m.usedDeepThink,
+                      usedDeepThink: useThink === 'deep' || m.usedDeepThink,
+                      thinkingMode: m.thinkingMode ?? useThink,
                     }
                   : m,
               ),
@@ -495,7 +526,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
           }
         },
       },
-      { webSearch: useSearch, deepThink: useThink },
+      { webSearch: useSearch, thinkingMode: useThink },
     )
   }, [streaming, persist])
 
@@ -521,10 +552,11 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
           role: 'assistant',
           content: '',
           timestamp: Date.now(),
-          usedSearch: webSearchRef.current,
-          usedDeepThink: deepThinkRef.current,
-        }
-        const nextChat: Chat = { ...chat, messages: [...messages, assistantMsg] }
+        usedSearch: webSearchRef.current,
+        usedDeepThink: thinkModeRef.current === 'deep',
+        thinkingMode: thinkModeRef.current,
+      }
+      const nextChat: Chat = { ...chat, messages: [...messages, assistantMsg] }
         commitChat(nextChat)
         await runStream(nextChat, messages, assistantMsg.id)
       } else {
@@ -563,11 +595,11 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       searching,
       sidebarOpen,
       webSearch,
-      deepThink,
+      thinkMode,
       setSidebarOpen,
       setSearchQuery,
       setWebSearch,
-      setDeepThink,
+      setThinkMode,
       refreshChats,
       newChat,
       selectChat,
@@ -595,10 +627,10 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       searching,
       sidebarOpen,
       webSearch,
-      deepThink,
+      thinkMode,
       setSearchQuery,
       setWebSearch,
-      setDeepThink,
+      setThinkMode,
       refreshChats,
       newChat,
       selectChat,
