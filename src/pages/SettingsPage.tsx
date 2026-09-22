@@ -50,7 +50,7 @@ export default function SettingsPage() {
     model: '',
     systemPrompt: '',
     temperature: 0.7,
-    maxTokens: 4096,
+    maxTokens: 16384,
     topP: 1,
     presencePenalty: 0,
     frequencyPenalty: 0,
@@ -328,7 +328,7 @@ export default function SettingsPage() {
                     min={1}
                     max={1000000}
                     value={ai.maxTokens}
-                    onChange={(e) => setAi({ ...ai, maxTokens: Number(e.target.value) || 4096 })}
+                    onChange={(e) => setAi({ ...ai, maxTokens: Number(e.target.value) || 16384 })}
                   />
                 </Field>
 

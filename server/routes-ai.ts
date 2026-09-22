@@ -21,6 +21,31 @@ Before answering, reason carefully and privately about the problem:
 
 Show only a concise version of your reasoning (if useful), then give the final answer. Be precise. Do not pad with filler.`
 
+const THINK_MIN_MS = 30_000
+const THINK_MAX_MS = 300_000
+
+function randomThinkMs(): number {
+  return THINK_MIN_MS + Math.floor(Math.random() * (THINK_MAX_MS - THINK_MIN_MS + 1))
+}
+
+function waitThink(ms: number, signal: AbortSignal): Promise<void> {
+  return new Promise((resolve) => {
+    if (signal.aborted) {
+      resolve()
+      return
+    }
+    const timer = setTimeout(() => {
+      signal.removeEventListener('abort', onAbort)
+      resolve()
+    }, ms)
+    const onAbort = () => {
+      clearTimeout(timer)
+      resolve()
+    }
+    signal.addEventListener('abort', onAbort, { once: true })
+  })
+}
+
 aiRouter.post('/stream', async (req, res) => {
   const config = getConfig()
   const { messages, webSearch: enableSearch, deepThink } = req.body as {
@@ -72,27 +97,6 @@ aiRouter.post('/stream', async (req, res) => {
     send({ sources: searchHits })
   }
 
-  const payload: Record<string, unknown> = {
-    model: config.model,
-    messages: apiMessages,
-    temperature: config.temperature,
-    max_tokens: config.maxTokens,
-    top_p: config.topP,
-    presence_penalty: config.presencePenalty,
-    frequency_penalty: config.frequencyPenalty,
-    stream: useStream,
-  }
-  if (useStream) {
-    payload.stream_options = { include_usage: true }
-  }
-
-  const base = config.apiBaseURL.replace(/\/+$/, '')
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-    Accept: useStream ? 'text/event-stream' : 'application/json',
-  }
-  if (config.apiKey) headers.Authorization = `Bearer ${config.apiKey}`
-
   const sendError = (type: AIErrorType, message: string, status?: number) => {
     send({ error: { type, message, status } })
     res.write('data: [DONE]\n\n')
@@ -101,97 +105,172 @@ aiRouter.post('/stream', async (req, res) => {
 
   const abort = new AbortController()
   req.on('close', () => abort.abort())
-
   let timeout: NodeJS.Timeout | undefined
+
+  if (deepThink) {
+    await waitThink(randomThinkMs(), abort.signal)
+    if (abort.signal.aborted) {
+      if (!res.writableEnded) {
+        res.write('data: [DONE]\n\n')
+        res.end()
+      }
+      return
+    }
+  }
+
   try {
-    timeout = setTimeout(() => abort.abort(), 180_000)
-    const upstream = await fetch(`${base}/chat/completions`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(payload),
-      signal: abort.signal,
+    const payload: Record<string, unknown> = {
+      model: config.model,
+      messages: apiMessages,
+      temperature: config.temperature,
+      max_tokens: config.maxTokens,
+      top_p: config.topP,
+      presence_penalty: config.presencePenalty,
+      frequency_penalty: config.frequencyPenalty,
+      stream: useStream,
+    }
+    if (useStream) {
+      payload.stream_options = { include_usage: true }
+    }
+
+    const base = config.apiBaseURL.replace(/\/+$/, '')
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      Accept: useStream ? 'text/event-stream' : 'application/json',
+    }
+    if (config.apiKey) headers.Authorization = `Bearer ${config.apiKey}`
+
+    const MAX_CONTINUE = 6
+    let continues = 0
+    let accumulated = ''
+    let finishReason: string | undefined
+
+    const buildContinuePayload = (): Record<string, unknown> => ({
+      ...payload,
+      messages: [...apiMessages, { role: 'assistant', content: accumulated }],
     })
 
-    if (!upstream.ok) {
-      const text = await upstream.text().catch(() => '')
-      const mapped = mapUpstreamError(upstream.status, text)
-      sendError(mapped.type, mapped.message, upstream.status)
-      return
-    }
+    while (continues < MAX_CONTINUE) {
+      timeout = setTimeout(() => abort.abort(), 600_000)
 
-    if (!useStream || !upstream.body) {
-      const data = (await upstream.json()) as {
-        choices?: { message?: { content?: string; reasoning_content?: string; reasoning?: string } }[]
-        usage?: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number }
-        model?: string
-      }
-      const msg = data.choices?.[0]?.message
-      const content = msg?.content ?? ''
-      const reasoning = msg?.reasoning_content ?? msg?.reasoning
-      send({
-        choices: [{ delta: { content, ...(reasoning ? { reasoning_content: reasoning } : {}) } }],
-        model: data.model,
-        usage: data.usage
-          ? {
-              prompt_tokens: data.usage.prompt_tokens,
-              completion_tokens: data.usage.completion_tokens,
-              total_tokens: data.usage.total_tokens,
-            }
-          : undefined,
+      const upstream = await fetch(`${base}/chat/completions`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(continues === 0 ? payload : buildContinuePayload()),
+        signal: abort.signal,
       })
-      res.write('data: [DONE]\n\n')
-      res.end()
-      return
-    }
 
-    const reader = upstream.body.getReader()
-    const decoder = new TextDecoder()
-    let buffer = ''
-    let upstreamDone = false
+      if (!upstream.ok) {
+        const text = await upstream.text().catch(() => '')
+        const mapped = mapUpstreamError(upstream.status, text)
+        sendError(mapped.type, mapped.message, upstream.status)
+        return
+      }
 
-    const processLine = (line: string): boolean => {
-      const trimmed = line.trim()
-      if (!trimmed || !trimmed.startsWith('data:')) return true
-      const dataStr = trimmed.slice(5).trim()
-      if (dataStr === '[DONE]') {
-        upstreamDone = true
+      finishReason = undefined
+
+      if (!useStream || !upstream.body) {
+        const data = (await upstream.json()) as {
+          choices?: {
+            message?: { content?: string; reasoning_content?: string; reasoning?: string }
+            finish_reason?: string
+          }[]
+          usage?: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number }
+          model?: string
+        }
+        const msg = data.choices?.[0]?.message
+        const content = msg?.content ?? ''
+        const reasoning = msg?.reasoning_content ?? msg?.reasoning
+        finishReason = data.choices?.[0]?.finish_reason
+        if (continues > 0 && content) {
+          send({
+            choices: [{ delta: { content } }],
+            model: data.model,
+          })
+        } else {
+          send({
+            choices: [{ delta: { content, ...(reasoning ? { reasoning_content: reasoning } : {}) } }],
+            model: data.model,
+            usage: data.usage
+              ? {
+                  prompt_tokens: data.usage.prompt_tokens,
+                  completion_tokens: data.usage.completion_tokens,
+                  total_tokens: data.usage.total_tokens,
+                }
+              : undefined,
+          })
+        }
+        if (content) accumulated += content
+        if (finishReason === 'length' && accumulated && continues < MAX_CONTINUE - 1) {
+          continues += 1
+          clearTimeout(timeout)
+          continue
+        }
         res.write('data: [DONE]\n\n')
+        res.end()
+        return
+      }
+
+      const reader = upstream.body.getReader()
+      const decoder = new TextDecoder()
+      let buffer = ''
+      let upstreamDone = false
+
+      const processLine = (line: string): boolean => {
+        const trimmed = line.trim()
+        if (!trimmed || !trimmed.startsWith('data:')) return true
+        const dataStr = trimmed.slice(5).trim()
+        if (dataStr === '[DONE]') {
+          upstreamDone = true
+          return true
+        }
+        try {
+          const parsed = JSON.parse(dataStr)
+          if (parsed.error) {
+            const e = parsed.error
+            const type: AIErrorType =
+              e.code === 'invalid_api_key' ? 'invalid_api_key'
+              : e.code === 'model_not_found' ? 'model_not_found'
+              : 'server_error'
+            sendError(type, e.message || 'Provider error')
+            return false
+          }
+          const choice = parsed.choices?.[0]
+          if (choice?.finish_reason) finishReason = choice.finish_reason
+          const delta = choice?.delta?.content ?? choice?.message?.content
+          if (typeof delta === 'string' && delta) accumulated += delta
+          res.write(`data: ${dataStr}\n\n`)
+        } catch {
+          // skip malformed chunks
+        }
         return true
       }
-      try {
-        const parsed = JSON.parse(dataStr)
-        if (parsed.error) {
-          const e = parsed.error
-          const type: AIErrorType =
-            e.code === 'invalid_api_key' ? 'invalid_api_key'
-            : e.code === 'model_not_found' ? 'model_not_found'
-            : 'server_error'
-          sendError(type, e.message || 'Provider error')
-          return false
+
+      while (!upstreamDone) {
+        const { done, value } = await reader.read()
+        if (done) {
+          buffer += decoder.decode()
+          break
         }
-        res.write(`data: ${dataStr}\n\n`)
-      } catch {
-        // skip malformed chunks
+        buffer += decoder.decode(value, { stream: true })
+        const lines = buffer.split('\n')
+        buffer = lines.pop() ?? ''
+        for (const line of lines) {
+          if (!processLine(line)) return
+        }
       }
-      return true
-    }
 
-    while (!upstreamDone) {
-      const { done, value } = await reader.read()
-      if (done) {
-        buffer += decoder.decode()
-        break
+      if (!upstreamDone && buffer.trim()) {
+        if (!processLine(buffer)) return
       }
-      buffer += decoder.decode(value, { stream: true })
-      const lines = buffer.split('\n')
-      buffer = lines.pop() ?? ''
-      for (const line of lines) {
-        if (!processLine(line)) return
-      }
-    }
 
-    if (!upstreamDone && buffer.trim()) {
-      if (!processLine(buffer)) return
+      clearTimeout(timeout)
+
+      if (finishReason === 'length' && accumulated && continues < MAX_CONTINUE - 1) {
+        continues += 1
+        continue
+      }
+      break
     }
 
     res.write('data: [DONE]\n\n')

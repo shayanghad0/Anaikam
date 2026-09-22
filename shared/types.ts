@@ -200,7 +200,7 @@ export function defaultConfig(): AppConfig {
     model: '',
     systemPrompt: '',
     temperature: 0.7,
-    maxTokens: 4096,
+    maxTokens: 16384,
     topP: 1,
     presencePenalty: 0,
     frequencyPenalty: 0,
