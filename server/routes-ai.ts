@@ -188,19 +188,21 @@ function buildAnswerMessages(
 
 aiRouter.post('/stream', async (req, res) => {
   const config = getConfig()
-  const { messages, webSearch: enableSearch, deepThink, thinkingMode } = req.body as {
+  const { messages, webSearch: enableSearch, deepThink, thinkingMode, model: requestedModel } = req.body as {
     messages?: Message[]
     webSearch?: boolean
     deepThink?: boolean
     thinkingMode?: ThinkMode | boolean
+    model?: string
   }
   const thinkMode = normalizeThinkMode(thinkingMode, deepThink)
+  const resolvedModel = requestedModel || config.model
 
   if (!Array.isArray(messages) || messages.length === 0) {
     res.status(400).json({ error: 'messages array is required', type: 'unknown' })
     return
   }
-  if (!config.apiBaseURL || !config.model) {
+  if (!config.apiBaseURL || !resolvedModel) {
     res.status(400).json({
       error: 'AI is not configured. Open Settings and set your provider, URL, key, and model.',
       type: 'not_configured',
@@ -256,7 +258,7 @@ aiRouter.post('/stream', async (req, res) => {
     const started = Date.now()
     let thinking = ''
     try {
-      thinking = await streamThinkPhase(config, apiMessages, thinkMode, send, abort.signal)
+      thinking = await streamThinkPhase({ ...config, model: resolvedModel }, apiMessages, thinkMode, send, abort.signal)
     } catch (err) {
       if (abort.signal.aborted || (err instanceof Error && err.name === 'AbortError')) {
         if (!res.writableEnded) {
@@ -284,7 +286,7 @@ aiRouter.post('/stream', async (req, res) => {
 
   try {
     const payload: Record<string, unknown> = {
-      model: config.model,
+      model: resolvedModel,
       messages: answerMessages,
       temperature: config.temperature,
       max_tokens: config.maxTokens,

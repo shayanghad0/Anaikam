@@ -12,6 +12,7 @@ function toPublic(): PublicConfig {
     apiBaseURL: c.apiBaseURL,
     hasApiKey: Boolean(c.apiKey),
     model: c.model,
+    models: c.models ?? [],
     systemPrompt: c.systemPrompt,
     temperature: c.temperature,
     maxTokens: c.maxTokens,
@@ -54,6 +55,7 @@ configRouter.put('/', (req, res) => {
   if (typeof body.apiBaseURL === 'string') patch.apiBaseURL = body.apiBaseURL.trim().replace(/\/+$/, '')
   if (typeof body.apiKey === 'string' && body.apiKey.length > 0) patch.apiKey = body.apiKey
   if (typeof body.model === 'string') patch.model = body.model
+  if (Array.isArray(body.models)) patch.models = body.models
   if (typeof body.systemPrompt === 'string') patch.systemPrompt = body.systemPrompt
   if (typeof body.temperature === 'number') patch.temperature = clamp(body.temperature, 0, 2)
   if (typeof body.maxTokens === 'number') patch.maxTokens = Math.round(clamp(body.maxTokens, 1, 1_000_000))
@@ -110,7 +112,7 @@ configRouter.post('/test', async (_req, res) => {
       method: 'POST',
       headers,
       body: JSON.stringify({
-        model: config.model || 'gpt-4o-mini',
+        model: config.model || (config.models?.[0] || 'gpt-4o-mini'),
         messages: [{ role: 'user', content: 'ping' }],
         max_tokens: 1,
         stream: false,

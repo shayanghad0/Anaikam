@@ -38,7 +38,7 @@ interface ChatContextValue {
   renameChat: (id: string, title: string) => Promise<void>
   deleteChat: (id: string) => Promise<void>
   importChat: (data: Partial<Chat> & { messages: Message[] }) => Promise<Chat>
-  sendMessage: (content: string, attachments: AttachmentMeta[]) => Promise<void>
+  sendMessage: (content: string, attachments: AttachmentMeta[], model?: string) => Promise<void>
   stopGeneration: () => void
   regenerate: () => Promise<void>
   continueGeneration: () => Promise<void>
@@ -223,7 +223,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
   }, [])
 
   const runStream = React.useCallback(
-    async (chat: Chat, history: Message[], appendToMessageId: string) => {
+    async (chat: Chat, history: Message[], appendToMessageId: string, model?: string) => {
       const controller = new AbortController()
       abortRef.current = controller
       setStreaming(true)
@@ -333,14 +333,14 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
             })()
           },
         },
-        { webSearch: useSearch, thinkingMode: useThink },
+        { webSearch: useSearch, thinkingMode: useThink, model },
       )
     },
     [persist, commitChat],
   )
 
   const sendMessage = React.useCallback(
-    async (content: string, attachments: AttachmentMeta[]) => {
+    async (content: string, attachments: AttachmentMeta[], model?: string) => {
       const trimmed = content.trim()
       if (!trimmed && attachments.length === 0) return
       if (streaming) return
@@ -395,7 +395,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
 
       const history = nextMessages.filter((m) => !m.error || m.content)
       const forApi = history.filter((m, i) => !(i === history.length - 1 && m.role === 'assistant' && !m.content))
-      await runStream(nextChat, forApi, assistantMsg.id)
+      await runStream(nextChat, forApi, assistantMsg.id, model)
     },
     [streaming, runStream, commitChat],
   )

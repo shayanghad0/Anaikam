@@ -3,6 +3,7 @@ import type { AIErrorPayload, Message, SearchSource, ThinkMode, TokenUsage } fro
 export interface StreamOptions {
   webSearch?: boolean
   thinkingMode?: ThinkMode
+  model?: string
 }
 
 export interface ThinkingMeta {
@@ -39,6 +40,7 @@ export async function streamChat(
         webSearch: Boolean(options.webSearch),
         thinkingMode: options.thinkingMode ?? 'off',
         deepThink: options.thinkingMode === 'deep',
+        model: options.model,
       }),
       signal,
     })

@@ -2,6 +2,13 @@ export type Role = 'user' | 'assistant' | 'system'
 
 export type ThinkMode = 'off' | 'normal' | 'deep'
 
+export type AIModelType = 'text' | 'vision' | 'both'
+
+export interface AIModelEntry {
+  name: string
+  type: AIModelType
+}
+
 export const THINK_LABEL: Record<ThinkMode, string> = {
   off: 'Off',
   normal: 'Normal thinking',
@@ -100,6 +107,7 @@ export interface AppConfig {
   apiBaseURL: string
   apiKey: string
   model: string
+  models: AIModelEntry[]
   systemPrompt: string
   temperature: number
   maxTokens: number
@@ -117,6 +125,7 @@ export interface PublicConfig {
   apiBaseURL: string
   hasApiKey: boolean
   model: string
+  models: AIModelEntry[]
   systemPrompt: string
   temperature: number
   maxTokens: number
@@ -136,6 +145,7 @@ export interface ConfigUpdate {
   apiBaseURL?: string
   apiKey?: string
   model?: string
+  models?: AIModelEntry[]
   systemPrompt?: string
   temperature?: number
   maxTokens?: number
@@ -223,6 +233,7 @@ export function defaultConfig(): AppConfig {
     apiBaseURL: '',
     apiKey: '',
     model: '',
+    models: [],
     systemPrompt: '',
     temperature: 0.7,
     maxTokens: 16384,

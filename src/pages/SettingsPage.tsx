@@ -13,6 +13,7 @@ import {
   Database,
   Upload,
   Download,
+  X,
 } from 'lucide-react'
 import { AppShell } from '@/components/layout/AppShell'
 import { Button } from '@/components/ui/button'
@@ -27,7 +28,8 @@ import { useToast } from '@/components/ui/toast'
 import { useSettings } from '@/contexts/SettingsContext'
 import { useAuth } from '@/contexts/AuthContext'
 import { configApi, backupApi } from '@/services/client'
-import type { AppearanceSettings, ChatDisplaySettings } from '@shared/types'
+import { cn } from '@/lib/utils'
+import type { AppearanceSettings, ChatDisplaySettings, AIModelEntry, AIModelType } from '@shared/types'
 
 const ACCENTS = ['#7C3AED', '#2563EB', '#0891B2', '#059669', '#D97706', '#DB2777', '#DC2626', '#4F46E5']
 
@@ -53,6 +55,7 @@ export default function SettingsPage() {
     apiBaseURL: '',
     apiKey: '',
     model: '',
+    models: [] as AIModelEntry[],
     systemPrompt: '',
     temperature: 0.7,
     maxTokens: 16384,
@@ -90,6 +93,7 @@ export default function SettingsPage() {
       apiBaseURL: config.apiBaseURL,
       apiKey: '',
       model: config.model,
+      models: config.models ?? [],
       systemPrompt: config.systemPrompt,
       temperature: config.temperature,
       maxTokens: config.maxTokens,
@@ -110,6 +114,7 @@ export default function SettingsPage() {
         apiProviderName: ai.apiProviderName,
         apiBaseURL: ai.apiBaseURL,
         model: ai.model,
+        models: ai.models,
         systemPrompt: ai.systemPrompt,
         temperature: ai.temperature,
         maxTokens: ai.maxTokens,
@@ -176,6 +181,7 @@ export default function SettingsPage() {
       apiBaseURL: config.apiBaseURL,
       apiKey: '',
       model: config.model,
+      models: config.models ?? [],
       systemPrompt: config.systemPrompt,
       temperature: config.temperature,
       maxTokens: config.maxTokens,
@@ -240,24 +246,15 @@ export default function SettingsPage() {
               <Section
                 icon={<Sparkles className="h-4 w-4" />}
                 title="AI Configuration"
-                description="Works with any OpenAI-compatible API — OpenAI, OpenRouter, Groq, DeepSeek, Ollama, LM Studio, and more."
+                description="Works with any OpenAI-compatible API - OpenAI, OpenRouter, Groq, DeepSeek, Ollama, LM Studio, and more."
               >
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <Field label="Provider Name">
+                <Field label="Provider Name">
                     <Input
                       value={ai.apiProviderName}
                       onChange={(e) => setAi({ ...ai, apiProviderName: e.target.value })}
-                      placeholder="OpenAI, OpenRouter, Ollama…"
+                      placeholder="OpenAI, OpenRouter, Ollama..."
                     />
                   </Field>
-                  <Field label="Model">
-                    <Input
-                      value={ai.model}
-                      onChange={(e) => setAi({ ...ai, model: e.target.value })}
-                      placeholder="gpt-4.1, deepseek-chat, llama3…"
-                    />
-                  </Field>
-                </div>
                 <Field label="API Base URL">
                   <Input
                     value={ai.apiBaseURL}
@@ -272,7 +269,7 @@ export default function SettingsPage() {
                       type={showKey ? 'text' : 'password'}
                       value={ai.apiKey}
                       onChange={(e) => setAi({ ...ai, apiKey: e.target.value })}
-                      placeholder={config.hasApiKey ? '••••••••••••••••' : 'sk-…'}
+                      placeholder={config.hasApiKey ? '••••••••••••••••' : 'sk-...'}
                       className="pr-10"
                       autoComplete="off"
                     />
@@ -286,12 +283,77 @@ export default function SettingsPage() {
                     </button>
                   </div>
                 </Field>
+
+                <Field label="Default Model">
+                  <Select
+                    value={ai.model || undefined}
+                    onValueChange={(v) => setAi({ ...ai, model: v })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select a default model..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {ai.models.map((m) => (
+                        <SelectItem key={m.name} value={m.name}>{m.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {(!ai.models || ai.models.length === 0) && (
+                    <p className="mt-1 text-xs text-muted-foreground">Add models below first, then pick one here.</p>
+                  )}
+                </Field>
+
+                <section className="rounded-xl border border-border p-4 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="text-sm font-semibold">Model Registry</h3>
+                      <p className="text-[11px] text-muted-foreground">Available models for this provider.</p>
+                    </div>
+                  </div>
+                  {ai.models.length > 0 ? (
+                    <div className="flex flex-wrap gap-2">
+                      {ai.models.map((m, idx) => (
+                        <span
+                          key={idx}
+                          className="inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-2.5 py-1 text-xs"
+                        >
+                          <span>{m.name}</span>
+                          <span
+                            className={cn(
+                              'rounded-full px-1.5 py-0.5 text-[10px] font-medium',
+                              m.type === 'vision' && 'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300',
+                              m.type === 'text' && 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300',
+                              m.type === 'both' && 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300',
+                            )}
+                          >
+                            {m.type === 'vision' ? 'Vision' : m.type === 'text' ? 'Text' : 'Both'}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => setAi({ ...ai, models: ai.models.filter((_, i) => i !== idx) })}
+                            className="cursor-pointer text-muted-foreground hover:text-destructive"
+                            aria-label={`Remove ${m.name}`}
+                          >
+                            <X className="h-3 w-3" />
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">No models defined yet.</p>
+                  )}
+                  <NewModelInput
+                    models={ai.models}
+                    onAdd={(name, type) => setAi({ ...ai, models: [...ai.models, { name, type }] })}
+                  />
+                </section>
+
                 <Field label="System Prompt">
                   <textarea
                     value={ai.systemPrompt}
                     onChange={(e) => setAi({ ...ai, systemPrompt: e.target.value })}
                     rows={4}
-                    placeholder="You are a helpful assistant…"
+                    placeholder="You are a helpful assistant..."
                     className="flex w-full rounded-lg border border-input bg-card px-3 py-2.5 text-sm shadow-sm focus-visible:outline-2 focus-visible:outline-ring resize-y"
                   />
                 </Field>
@@ -496,7 +558,7 @@ export default function SettingsPage() {
                 <div className="flex items-center justify-between rounded-xl border border-border p-3">
                   <div className="pr-4">
                     <p className="text-sm font-medium">Default thinking mode</p>
-                    <p className="text-xs text-muted-foreground">Off answers instantly · Normal 30–60s · Deep 30s–5m</p>
+                    <p className="text-xs text-muted-foreground">Off answers instantly · Normal 30-60s · Deep 30s-5m</p>
                   </div>
                   <Select
                     value={chat.thinkMode}
@@ -520,7 +582,7 @@ export default function SettingsPage() {
                 <div className="grid gap-4 sm:grid-cols-2">
                   <Button onClick={() => void backupApi.export()} disabled={backupLoading}>
                     <Download className="h-4 w-4" />
-                    {backupLoading ? 'Exporting…' : 'Export Database'}
+                    {backupLoading ? 'Exporting...' : 'Export Database'}
                   </Button>
                   <label className="relative">
                     <input
@@ -554,7 +616,7 @@ export default function SettingsPage() {
                       className="w-full"
                     >
                       <Upload className="h-4 w-4" />
-                      {backupLoading ? 'Importing…' : 'Import Database'}
+                      {backupLoading ? 'Importing...' : 'Import Database'}
                     </Button>
                   </label>
                 </div>
@@ -654,6 +716,58 @@ function SliderField({
         onValueChange={([v]) => onChange(v)}
         aria-label={label}
       />
+    </div>
+  )
+}
+
+function NewModelInput({ models, onAdd }: {
+  models: AIModelEntry[]
+  onAdd: (name: string, type: AIModelType) => void
+}) {
+  const [value, setValue] = React.useState('')
+  const [type, setType] = React.useState<AIModelType>('text')
+  return (
+    <div className="flex gap-2 items-center">
+      <Input
+        id="new-model-input"
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault()
+            const val = value.trim()
+            if (val && !models.some((m) => m.name === val)) {
+              onAdd(val, type)
+              setValue('')
+            }
+          }
+        }}
+        placeholder="Model name & press Enter"
+        className="h-8 text-xs flex-1"
+      />
+      <Select value={type} onValueChange={(v) => setType(v as AIModelType)}>
+        <SelectTrigger className="h-8 w-24 text-xs">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="text">Text</SelectItem>
+          <SelectItem value="vision">Vision</SelectItem>
+          <SelectItem value="both">Both</SelectItem>
+        </SelectContent>
+      </Select>
+      <button
+        type="button"
+        onClick={() => {
+          const val = value.trim()
+          if (val && !models.some((m) => m.name === val)) {
+            onAdd(val, type)
+            setValue('')
+          }
+        }}
+        className="h-8 px-3 text-xs rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
+      >
+        Add
+      </button>
     </div>
   )
 }

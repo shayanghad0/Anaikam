@@ -1,5 +1,5 @@
 import * as React from 'react'
-import { Paperclip, Send, Square, X, FileText, Sparkles, Globe, Brain, Check } from 'lucide-react'
+import { Paperclip, Send, Square, X, FileText, Globe, Brain, Check } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -18,13 +18,13 @@ const ACCEPT = 'image/png,image/jpeg,image/gif,image/webp,application/pdf,text/p
 
 const THINK_OPTIONS: Array<{ mode: ThinkMode; label: string; hint: string }> = [
   { mode: 'off', label: 'Off', hint: 'Answer immediately' },
-  { mode: 'normal', label: 'Normal thinking', hint: '30–60s · brief reasoning' },
-  { mode: 'deep', label: 'Deep thinking', hint: '30s–5m · full reasoning' },
+  { mode: 'normal', label: 'Normal thinking', hint: '30-60s · brief reasoning' },
+  { mode: 'deep', label: 'Deep thinking', hint: '30s-5m · full reasoning' },
 ]
 
 export function Composer() {
   const { sendMessage, streaming, stopGeneration, webSearch, thinkMode, setWebSearch, setThinkMode } = useChat()
-  const { config } = useSettings()
+  const { config, selectedModel } = useSettings()
   const { toast } = useToast()
   const [value, setValue] = React.useState('')
   const [attachments, setAttachments] = React.useState<AttachmentMeta[]>([])
@@ -58,7 +58,7 @@ export function Composer() {
     setValue('')
     setAttachments([])
     requestAnimationFrame(resize)
-    await sendMessage(value, atts)
+    await sendMessage(value, atts, selectedModel || undefined)
   }
 
   const onFiles = async (files: FileList | null) => {
@@ -152,8 +152,8 @@ export function Composer() {
                   thinkMode === 'off'
                     ? 'Thinking off'
                     : thinkMode === 'normal'
-                      ? 'Normal thinking (30–60s)'
-                      : 'Deep thinking (30s–5m)'
+                      ? 'Normal thinking (30-60s)'
+                      : 'Deep thinking (30s-5m)'
                 }
                 className={cn(
                   'cursor-pointer rounded-lg p-2 transition-colors',
@@ -195,7 +195,7 @@ export function Composer() {
                 void submit()
               }
             }}
-            placeholder="Ask anything…"
+            placeholder="Ask anything..."
             rows={1}
             className="max-h-[220px] min-h-[40px] flex-1 resize-none bg-transparent px-1 py-2 text-sm outline-none placeholder:text-muted-foreground"
             aria-label="Message"
@@ -220,11 +220,9 @@ export function Composer() {
 
         <p className="mt-2 text-center text-[11px] text-muted-foreground">
           {uploading ? (
-            'Uploading…'
+            'Uploading...'
           ) : (
             <>
-              <Sparkles className="mr-1 inline h-3 w-3 align-[-2px] text-primary" />
-              {config?.model ? `${config.model}` : 'Configure a model in Settings'}
               {webSearch ? ' · Search' : ''}
               {thinkMode === 'normal' ? ' · Normal thinking' : thinkMode === 'deep' ? ' · Deep thinking' : ''}
               {' · Enter to send, Shift+Enter for newline'}

@@ -10,6 +10,8 @@ interface SettingsContextValue {
   appearance: AppearanceSettings
   chatSettings: ChatDisplaySettings
   resolvedTheme: 'dark' | 'light'
+  selectedModel: string
+  setSelectedModel: (m: string) => void
   refresh: () => Promise<void>
   update: (patch: ConfigUpdate) => Promise<PublicConfig>
 }
@@ -20,6 +22,7 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
   const [config, setConfig] = React.useState<PublicConfig | null>(null)
   const [loading, setLoading] = React.useState(true)
   const [resolvedTheme, setResolvedTheme] = React.useState<'dark' | 'light'>('dark')
+  const [selectedModel, setSelectedModel] = React.useState('')
 
   const applyAppearance = React.useCallback((appearance: AppearanceSettings) => {
     const root = document.documentElement
@@ -61,6 +64,12 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
     return () => mq.removeEventListener('change', onChange)
   }, [refresh, applyAppearance])
 
+  React.useEffect(() => {
+    if (config?.model && (!selectedModel || selectedModel === config.model)) {
+      setSelectedModel(config.model)
+    }
+  }, [config?.model])
+
   const update = React.useCallback(
     async (patch: ConfigUpdate) => {
       const next = await configApi.update(patch)
@@ -78,10 +87,12 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
       appearance: config?.appearance ?? { ...DEFAULT_APPEARANCE },
       chatSettings: { ...DEFAULT_CHAT_SETTINGS, ...(config?.chat ?? {}) },
       resolvedTheme,
+      selectedModel,
+      setSelectedModel,
       refresh,
       update,
     }),
-    [config, loading, resolvedTheme, refresh, update],
+    [config, loading, resolvedTheme, selectedModel, refresh, update],
   )
 
   return <SettingsContext.Provider value={value}>{children}</SettingsContext.Provider>
