@@ -2,7 +2,7 @@ export type Role = 'user' | 'assistant' | 'system'
 
 export type ThinkMode = 'off' | 'normal' | 'deep'
 
-export type AIModelType = 'text' | 'vision' | 'both'
+export type AIModelType = 'text' | 'vision' | 'image-gen' | 'video-gen'
 
 export interface AIModelEntry {
   name: string

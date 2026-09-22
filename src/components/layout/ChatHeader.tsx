@@ -110,10 +110,11 @@ export function ChatHeader({ onOpenExport }: { onOpenExport: (chat: Chat) => voi
                       'rounded-full px-1.5 py-0.5 text-[10px] font-medium shrink-0',
                       m.type === 'vision' && 'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300',
                       m.type === 'text' && 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300',
-                      m.type === 'both' && 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300',
+                      m.type === 'image-gen' && 'bg-pink-100 text-pink-700 dark:bg-pink-900/40 dark:text-pink-300',
+                      m.type === 'video-gen' && 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300',
                     )}
                   >
-                    {m.type === 'vision' ? 'Vision' : m.type === 'text' ? 'Text' : 'Both'}
+                    {m.type === 'vision' ? 'Vision' : m.type === 'text' ? 'Text' : m.type === 'image-gen' ? 'Image Gen' : 'Video Gen'}
                   </span>
                   {selectedModel === m.name ? <Check className="ml-auto h-3.5 w-3.5 text-primary" /> : null}
                 </DropdownMenuItem>
