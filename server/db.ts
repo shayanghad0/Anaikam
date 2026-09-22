@@ -67,11 +67,23 @@ export function initDatabase(): void {
 export function getConfig(): AppConfig {
   const cfg = readJson<Partial<AppConfig>>(CONFIG_PATH, {})
   const base = defaultConfig()
+  const chat: ChatDisplaySettings = {
+    ...base.chat,
+    ...cfg.chat,
+    deepThink: Boolean(cfg.chat?.deepThink ?? base.chat.deepThink),
+    thinkMode:
+      typeof cfg.chat?.thinkMode === 'string' &&
+      (cfg.chat.thinkMode === 'off' || cfg.chat.thinkMode === 'normal' || cfg.chat.thinkMode === 'deep')
+        ? cfg.chat.thinkMode
+        : cfg.chat?.deepThink
+          ? 'deep'
+          : base.chat.thinkMode,
+  }
   return {
     ...base,
     ...cfg,
     appearance: { ...base.appearance, ...cfg.appearance },
-    chat: { ...base.chat, ...cfg.chat },
+    chat,
   }
 }
 

@@ -1,5 +1,13 @@
 export type Role = 'user' | 'assistant' | 'system'
 
+export type ThinkMode = 'off' | 'normal' | 'deep'
+
+export const THINK_LABEL: Record<ThinkMode, string> = {
+  off: 'Off',
+  normal: 'Normal thinking',
+  deep: 'Deep thinking',
+}
+
 export interface AttachmentMeta {
   id: string
   name: string
@@ -31,6 +39,8 @@ export interface Message {
   reasoning?: string
   usedSearch?: boolean
   usedDeepThink?: boolean
+  thinkingMode?: ThinkMode
+  thinkDurationMs?: number
   sources?: SearchSource[]
 }
 
@@ -80,6 +90,7 @@ export interface ChatDisplaySettings {
   enableKaTeX: boolean
   webSearch: boolean
   deepThink: boolean
+  thinkMode: ThinkMode
 }
 
 export interface AppConfig {
@@ -188,6 +199,20 @@ export const DEFAULT_CHAT_SETTINGS: ChatDisplaySettings = {
   enableKaTeX: true,
   webSearch: false,
   deepThink: false,
+  thinkMode: 'off',
+}
+
+export function normalizeThinkMode(value: unknown): ThinkMode {
+  if (value === 'normal' || value === 'deep' || value === 'off') return value
+  if (value === true) return 'deep'
+  if (value === false) return 'off'
+  return 'off'
+}
+
+export function resolveThinkMode(chat?: Partial<ChatDisplaySettings> | null): ThinkMode {
+  if (!chat) return 'off'
+  if (typeof chat.thinkMode === 'string') return normalizeThinkMode(chat.thinkMode)
+  return chat.deepThink ? 'deep' : 'off'
 }
 
 export function defaultConfig(): AppConfig {
