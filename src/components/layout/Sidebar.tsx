@@ -106,7 +106,7 @@ export function Sidebar({ onNavigateSettings }: { onNavigateSettings: () => void
               </svg>
             </div>
             <div className="min-w-0">
-              <p className="truncate text-sm font-semibold">Local ChatBot</p>
+              <p className="truncate text-sm font-semibold">Anaikam ChatBot</p>
               <p className="truncate text-[11px] text-muted-foreground">{username}</p>
             </div>
           </div>

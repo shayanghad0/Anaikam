@@ -351,37 +351,49 @@ function ReasoningBlock({ reasoning, isStreaming }: { reasoning: string; isStrea
 }
 
 function SourcesBlock({ sources }: { sources: NonNullable<Message['sources']> }) {
+  const [open, setOpen] = React.useState(false)
+
   return (
     <div className="mt-2 overflow-hidden rounded-xl border border-border/80 bg-muted/20">
-      <div className="flex items-center gap-2 border-b border-border/80 px-3 py-2 text-xs font-medium text-foreground">
-        <Link2 className="h-3.5 w-3.5 text-primary" />
-        <span>Sources</span>
-        <span className="ml-auto text-muted-foreground tabular-nums">{sources.length}</span>
-      </div>
-      <ul className="divide-y divide-border/60">
-        {sources.map((src, i) => (
-          <li key={`${src.url}-${i}`}>
-            <a
-              href={src.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-start gap-2 px-3 py-2 text-xs transition-colors hover:bg-muted/50"
-            >
-              <span className="mt-0.5 w-4 shrink-0 tabular-nums text-muted-foreground">{i + 1}.</span>
-              <span className="min-w-0 flex-1">
-                <span className="block truncate font-medium text-foreground group-hover:text-primary">
-                  {src.title || src.url}
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        aria-label={open ? 'Minimize sources' : 'Open sources'}
+        title={open ? 'Minimize sources' : 'Open sources'}
+        className="flex w-full cursor-pointer items-center gap-2 px-3 py-2 text-left text-xs text-foreground transition-colors hover:bg-muted/40"
+      >
+        <Link2 className="h-3.5 w-3.5 shrink-0 text-primary" />
+        <span className="flex-1 font-medium">Sources</span>
+        <span className="text-muted-foreground tabular-nums">{sources.length}</span>
+        <ChevronDown className={cn('h-3.5 w-3.5 text-muted-foreground transition-transform', !open && '-rotate-90')} />
+      </button>
+      {open ? (
+        <ul className="divide-y divide-border/60 border-t border-border/80">
+          {sources.map((src, i) => (
+            <li key={`${src.url}-${i}`}>
+              <a
+                href={src.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-start gap-2 px-3 py-2 text-xs transition-colors hover:bg-muted/50"
+              >
+                <span className="mt-0.5 w-4 shrink-0 tabular-nums text-muted-foreground">{i + 1}.</span>
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate font-medium text-foreground hover:text-primary">
+                    {src.title || src.url}
+                  </span>
+                  <span className="mt-0.5 block truncate text-muted-foreground">{src.url}</span>
+                  {src.snippet ? (
+                    <span className="mt-1 line-clamp-2 block text-muted-foreground/80">{src.snippet}</span>
+                  ) : null}
                 </span>
-                <span className="mt-0.5 block truncate text-muted-foreground">{src.url}</span>
-                {src.snippet ? (
-                  <span className="mt-1 line-clamp-2 block text-muted-foreground/80">{src.snippet}</span>
-                ) : null}
-              </span>
-              <Globe className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-            </a>
-          </li>
-        ))}
-      </ul>
+                <Globe className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+              </a>
+            </li>
+          ))}
+        </ul>
+      ) : null}
     </div>
   )
 }
