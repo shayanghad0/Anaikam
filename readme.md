@@ -1,167 +1,122 @@
-# Anaikam — AI Chat Application
+# Local ChatBot
 
-A production-ready, full-stack AI chat application with a modern chat interface.
-
-## Site Name
-
-**Anaikam**
-
----
-
-## Tech Stack
-
-| Layer | Technology |
-|-------|------------|
-| Backend | Node.js · Express.js · TypeScript |
-| Frontend | React · Vite · TypeScript |
-| Database | JSON files (auto-created on first startup) |
-
-**Not used:** MongoDB, MySQL, SQLite, PostgreSQL, Redis, IndexedDB, LocalStorage, SessionStorage. All persistence is server-side JSON.
-
----
-
-## Project Structure
-
-```
-/client
-  /components
-  /pages
-  /hooks
-  /services
-  /types
-  /utils
-
-/server
-  /routes
-  /controllers
-  /middlewares
-
-/shared
-
-/database
-  users.json
-  sessions.json
-  settings.json
-  models.json
-  chats.json
-  messages.json
-  system-prompts.json
-  themes.json
-  logs.json
-```
-
-All database files are created automatically on first startup.
-
----
+A production-quality, provider-agnostic AI chat web app (ChatGPT/Claude-like) that runs fully on your machine. Single-owner auth, JSON database, streaming responses, web search, deep thinking, attachments, and rich markdown.
 
 ## Features
 
-### Authentication
-- Login / Logout / Register
-- Forgot Password (admin reset)
-- Session-based authentication
-- bcrypt password hashing
-- Roles: Admin, User
+- **Any OpenAI-compatible provider** — OpenAI, OpenRouter, Groq, DeepSeek, Ollama, LM Studio, and more
+- **Streaming chat** with stop, regenerate, continue, edit, and delete
+- **Web search mode** — DuckDuckGo results injected into the prompt; source list under the reply
+- **Deep thinking mode** — reasoning system prompt + collapsible “Thought process” UI
+- **Attachments** — images, PDF, text/markdown (20MB cap), base64 upload
+- **Rich markdown** — GFM, syntax highlight, KaTeX math, Mermaid diagrams
+- **Chats** — create, rename, delete, group, search, import/export (MD / JSON / TXT)
+- **Settings** — AI provider, account (password change requires current password), appearance, chat display
+- **Single-owner auth** — default `admin` / `admin123`; session cookie; no public registration
+- **Pure black dark theme** by default (no light flash on load)
+- **Virtualized message list** for long conversations
+- **API keys never leave the server** — browser only talks to the local API
 
-### Chat
-- Streaming responses with stop/continue/retry
-- Edit user messages, delete messages
-- Copy message & copy code
-- Markdown rendering with syntax highlighting
-- Tables, LaTeX math, Mermaid diagrams
-- Image URL rendering
-- Typing animation & thinking indicator
-- Conversation title auto-generation & rename
-- Pinned & archived conversations
-- Unlimited conversations with search
-- Message timestamps
+## Stack
 
-### Model Providers
-Supports any OpenAI-compatible API:
-- OpenAI · OpenRouter · DeepSeek · Anthropic-compatible
-- Google Gemini-compatible · Ollama · LM Studio · vLLM · LiteLLM
+| Layer    | Tech |
+|----------|------|
+| Frontend | Vite, React 18, TypeScript, Tailwind CSS 4 |
+| Backend  | Express (local API only) |
+| Storage  | JSON files under `database/` (no SQL/NoSQL) |
 
-Configurable per-user: API URL, API Token, Model, Custom Headers
+## Requirements
 
-### Multi-Model
-Switch between configured models inside a chat (GPT, Claude, Gemini, DeepSeek, Qwen, Llama, Mistral, etc.)
+- Node.js 18+ (tested on Node 24)
+- An OpenAI-compatible API key or local endpoint
 
-### System Prompts
-Unlimited custom system prompts with:
-- Prompt library (translator, programmer, teacher, medical, law, business, writing assistant…)
-- Favorites, import/export, duplicate, categories
-
-### Personas
-Create AI personas with name, avatar, description, system prompt, temperature, creativity, preferred model, and categories.
-
-### Settings (all configurable from UI)
-Display name, profile picture, theme, language, timezone, font size, message width, send-with-enter, streaming, animations, markdown, code highlighting, temperature, top-p, max tokens, timeout, export format, auto-title, default system prompt.
-
-### Search
-Search conversations, messages, prompt library, and personas.
-
-### Export
-Export conversations as Markdown, PDF, HTML, JSON, or TXT. Import previous conversations.
-
-### UI Design
-- Modern Dark Mode & Light Mode
-- Responsive layout with sidebar
-- Top navigation, glassmorphism effects
-- Smooth spring-physics animations
-- Mobile support
-
-### Profile
-Avatar, username, display name, bio, theme, password, email, language.
-
-### Admin Panel
-Dashboard, user management, model management, logs, settings, announcements, statistics, API configuration, registration toggle.
-
----
-
-## Security
-
-- bcrypt password hashing
-- Rate limiting
-- Helmet.js
-- CORS protection
-- Input validation (Zod)
-- XSS protection
-- CSRF protection where applicable
-- Path validation
-- Secure session handling
-
----
-
-## Code Quality
-
-- Strict TypeScript (no `any`)
-- Clean Architecture
-- SOLID principles
-- Modular, reusable components
-- No duplicated code
-
----
-
-## Getting Started
+## Quick start
 
 ```bash
 npm install
 npm run dev
 ```
 
-On first startup the app auto-creates:
-- `/database` folder with all JSON files
-- Default admin account
-- Default settings and model configuration
+- App: http://localhost:5173  
+- API: http://127.0.0.1:3001  
 
----
+Log in with the default credentials, then open **Settings → AI** and set:
 
-## Core Design Principle
+1. **API Base URL** (e.g. `https://api.openai.com/v1`)
+2. **API Key**
+3. **Model** (e.g. `gpt-4o-mini`)
 
-This is **only an AI Chat application**. It does not contain:
-- Terminal, file explorer, project workspace
-- Git integration, code execution, shell commands
-- Agent tools, file editing, coding assistant features
-- Browser filesystem access
+Use **Test connection** before chatting.
 
-The frontend stores no data permanently — everything comes from the backend JSON database.
+### Production build
+
+```bash
+npm run build
+npm start
+```
+
+### Typecheck
+
+```bash
+npm run typecheck
+```
+
+## Scripts
+
+| Command | Description |
+|---------|-------------|
+| `npm run dev` | API + Vite together |
+| `npm run dev:server` | Express only |
+| `npm run dev:client` | Vite only |
+| `npm run build` | Typecheck + production bundle |
+| `npm start` | Run production server |
+| `npm run typecheck` | TypeScript project check |
+
+## Project layout
+
+```
+├── server/          # Express API, auth, AI proxy, web search, JSON DB
+├── shared/          # Shared TypeScript types & defaults
+├── src/             # React app (contexts, chat UI, settings, markdown)
+├── database/        # Auto-created: config, chats, attachments, sessions
+└── index.html       # Entry + dark-theme pre-paint script
+```
+
+## Modes
+
+### Search
+
+Toggle the **globe** icon in the composer. On send, the server queries DuckDuckGo, injects results into the model prompt, and returns a **Sources** list under the assistant message.
+
+### Deep thinking
+
+Toggle the **brain** icon. The server prepends a careful-reasoning system prompt; if the model streams `reasoning_content`, it appears in a collapsible **Thought process** block.
+
+Both defaults can be set under **Settings → Chat**.
+
+## Security notes
+
+- Change the default password after first login (**Settings → Account**).
+- Password changes require the current password (timing-safe compare).
+- `GET /api/config` never returns the password or API key (only `hasApiKey`).
+- AI calls are proxied server-side so keys stay out of the browser.
+- Bind API to `127.0.0.1` if you do not need LAN access.
+
+## Data
+
+Everything lives under `database/`:
+
+- `config.json` — settings and credentials  
+- `chats/*.json` — conversations  
+- `attachments/` — uploaded files  
+- `sessions.json` — login sessions  
+
+Delete files you no longer need; the app recreates structure on start.
+
+## License
+
+[MIT](LICENSE)
+
+## Security
+
+See [SECURITY.md](SECURITY.md) for reporting vulnerabilities and hardening notes. Change the default password after first login.
