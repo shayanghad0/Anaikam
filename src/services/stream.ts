@@ -129,7 +129,9 @@ export async function streamChat(
         choice?.delta?.reasoning ??
         choice?.message?.reasoning_content ??
         choice?.message?.reasoning
-      if (reasoning && callbacks.onReasoning) callbacks.onReasoning(reasoning)
+      if (reasoning && callbacks.onReasoning && options.thinkingMode && options.thinkingMode !== 'off') {
+        callbacks.onReasoning(reasoning)
+      }
       const delta = choice?.delta?.content ?? choice?.message?.content
       if (delta) callbacks.onDelta(delta)
       if (parsed.usage && callbacks.onUsage) {

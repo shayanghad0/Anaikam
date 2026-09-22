@@ -344,7 +344,7 @@ aiRouter.post('/stream', async (req, res) => {
         }
         const msg = data.choices?.[0]?.message
         const content = msg?.content ?? ''
-        const reasoning = msg?.reasoning_content ?? msg?.reasoning
+        const reasoning = thinkMode === 'off' ? undefined : msg?.reasoning_content ?? msg?.reasoning
         finishReason = data.choices?.[0]?.finish_reason
         if (continues > 0 && content) {
           send({
@@ -403,7 +403,17 @@ aiRouter.post('/stream', async (req, res) => {
           if (choice?.finish_reason) finishReason = choice.finish_reason
           const delta = choice?.delta?.content ?? choice?.message?.content
           if (typeof delta === 'string' && delta) accumulated += delta
-          res.write(`data: ${dataStr}\n\n`)
+          if (thinkMode === 'off') {
+            if (choice?.delta) {
+              delete choice.delta.reasoning_content
+              delete choice.delta.reasoning
+            }
+            if (choice?.message) {
+              delete choice.message.reasoning_content
+              delete choice.message.reasoning
+            }
+          }
+          res.write(`data: ${JSON.stringify(parsed)}\n\n`)
         } catch {
           // skip malformed chunks
         }

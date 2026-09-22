@@ -318,11 +318,11 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
                     ? {
                         ...m,
                         timestamp: m.timestamp || Date.now(),
-                        reasoning: reason || m.reasoning,
+                        reasoning: useThink === 'off' ? undefined : reason || m.reasoning,
                         usedSearch: useSearch,
                         usedDeepThink: useThink === 'deep',
-                        thinkingMode: m.thinkingMode ?? useThink,
-                        thinkDurationMs: m.thinkDurationMs ?? thinkDurationMs,
+                        thinkingMode: useThink,
+                        thinkDurationMs: useThink === 'off' ? undefined : m.thinkDurationMs ?? thinkDurationMs,
                         sources: sources ?? m.sources,
                       }
                     : m,
@@ -494,17 +494,17 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
             if (!current || current.id !== chat.id) return current
             return {
               ...current,
-                messages: current.messages.map((m) =>
-                  m.id === appendTo
-                    ? {
-                        ...m,
-                        reasoning: reason || m.reasoning,
-                        usedSearch: useSearch || m.usedSearch,
-                        usedDeepThink: useThink === 'deep' || m.usedDeepThink,
-                        thinkingMode: m.thinkingMode ?? useThink,
-                      }
-                    : m,
-                ),
+              messages: current.messages.map((m) =>
+                m.id === appendTo
+                  ? {
+                      ...m,
+                      reasoning: useThink === 'off' ? undefined : reason || m.reasoning,
+                      usedSearch: useSearch || m.usedSearch,
+                      usedDeepThink: useThink === 'deep' || m.usedDeepThink,
+                      thinkingMode: useThink,
+                    }
+                  : m,
+              ),
             }
           })
           const current = activeChatRef.current
@@ -515,7 +515,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
                 m.id === appendTo
                   ? {
                       ...m,
-                      reasoning: reason || m.reasoning,
+                      reasoning: useThink === 'off' ? undefined : reason || m.reasoning,
                       usedSearch: useSearch || m.usedSearch,
                       usedDeepThink: useThink === 'deep' || m.usedDeepThink,
                       thinkingMode: m.thinkingMode ?? useThink,

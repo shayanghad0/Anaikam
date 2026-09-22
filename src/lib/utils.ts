@@ -76,7 +76,7 @@ export function chatToMarkdown(chat: {
   for (const msg of chat.messages) {
     const who = msg.role === 'user' ? 'You' : 'Assistant'
     lines.push(`### ${who} · ${new Date(msg.timestamp).toLocaleString()}`, '', msg.content, '')
-    if (msg.reasoning) {
+    if (msg.reasoning && (msg as { thinkingMode?: string }).thinkingMode !== 'off') {
       lines.push('<details><summary>Thought process</summary>', '', msg.reasoning, '', '</details>', '')
     }
     if (msg.sources?.length) {
@@ -103,7 +103,9 @@ export function chatToTxt(chat: {
   for (const msg of chat.messages) {
     const who = msg.role === 'user' ? 'You' : 'Assistant'
     lines.push(`[${who}]`, msg.content, '')
-    if (msg.reasoning) lines.push('[Thinking]', msg.reasoning, '')
+    if (msg.reasoning && (msg as { thinkingMode?: string }).thinkingMode !== 'off') {
+      lines.push('[Thinking]', msg.reasoning, '')
+    }
     if (msg.sources?.length) {
       lines.push('[Sources]')
       for (const [i, src] of msg.sources.entries()) lines.push(`${i + 1}. ${src.title} — ${src.url}`)

@@ -160,14 +160,12 @@ export function MessageItem({
           </div>
         ) : (
           <div className="w-full">
-            {message.reasoning || (isStreamingFinal && streaming && message.thinkingMode && message.thinkingMode !== 'off') ? (
+            {message.reasoning && message.thinkingMode !== 'off' ? (
               <ReasoningBlock
-                reasoning={message.reasoning ?? ''}
+                reasoning={message.reasoning}
                 isStreaming={isStreamingFinal && streaming}
-                mode={message.thinkingMode && message.thinkingMode !== 'off' ? message.thinkingMode : undefined}
-                durationMs={
-                  isStreamingFinal && streaming && !message.reasoning ? undefined : message.thinkDurationMs
-                }
+                mode={message.thinkingMode === 'normal' || message.thinkingMode === 'deep' ? message.thinkingMode : undefined}
+                durationMs={message.thinkDurationMs}
               />
             ) : null}
             {emptyStream ? (
