@@ -3,7 +3,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { getConfig, ATTACHMENTS_DIR } from './db.ts'
 import { webSearch, formatSearchContext } from './web-search.ts'
-import type { AIErrorType, AttachmentMeta, Message } from '../shared/types.ts'
+import type { AIErrorType, AttachmentMeta, Message, ThinkMode } from '../shared/types.ts'
 
 export const aiRouter = Router()
 
@@ -21,11 +21,17 @@ Before answering, reason carefully and privately about the problem:
 
 Show only a concise version of your reasoning (if useful), then give the final answer. Be precise. Do not pad with filler.`
 
-const THINK_MIN_MS = 30_000
-const THINK_MAX_MS = 300_000
+const NORMAL_THINK_PROMPT = `[Thinking mode]
+Think step by step before the final answer. Keep the reasoning brief and useful, then give a clear final answer.`
 
-function randomThinkMs(): number {
-  return THINK_MIN_MS + Math.floor(Math.random() * (THINK_MAX_MS - THINK_MIN_MS + 1))
+const THINK_RANGES: Record<Exclude<ThinkMode, 'off'>, { min: number; max: number }> = {
+  normal: { min: 30_000, max: 60_000 },
+  deep: { min: 30_000, max: 300_000 },
+}
+
+function randomThinkMs(mode: Exclude<ThinkMode, 'off'>): number {
+  const { min, max } = THINK_RANGES[mode]
+  return min + Math.floor(Math.random() * (max - min + 1))
 }
 
 function waitThink(ms: number, signal: AbortSignal): Promise<void> {
@@ -46,13 +52,149 @@ function waitThink(ms: number, signal: AbortSignal): Promise<void> {
   })
 }
 
+function normalizeThinkMode(raw: unknown, deepThink?: boolean): ThinkMode {
+  if (raw === 'off' || raw === 'normal' || raw === 'deep') return raw
+  if (raw === true || deepThink === true) return 'deep'
+  if (raw === false) return 'off'
+  if (typeof raw === 'string' && raw.trim()) return 'deep'
+  return deepThink ? 'deep' : 'off'
+}
+
+const THINK_ONLY_PROMPT: Record<Exclude<ThinkMode, 'off'>, string> = {
+  normal: `[Normal Thinking]
+Think carefully about how to answer the user's last request. Reason step by step in natural language: restate the goal, outline a clear approach, note constraints, and sketch the structure of a good answer.
+Output ONLY your thinking/reasoning. Do not write the final answer. Do not use markdown headers.`,
+  deep: `[Deep Thinking]
+Think thoroughly and privately about the user's last request before anyone sees an answer. Reason step by step: restate the goal and constraints, consider edge cases and failure modes, compare alternative approaches, check for contradictions, then settle on the best structure for a precise final answer.
+Output ONLY your thinking/reasoning. Do not write the final answer. Do not use markdown headers.`,
+}
+
+async function streamThinkPhase(
+  config: {
+    model: string
+    apiBaseURL: string
+    apiKey: string
+    temperature: number
+    maxTokens: number
+    topP: number
+    presencePenalty: number
+    frequencyPenalty: number
+  },
+  messages: ChatCompletionMessage[],
+  mode: Exclude<ThinkMode, 'off'>,
+  send: (obj: unknown) => void,
+  signal: AbortSignal,
+): Promise<string> {
+  const base = config.apiBaseURL.replace(/\/+$/, '')
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    Accept: 'text/event-stream',
+  }
+  if (config.apiKey) headers.Authorization = `Bearer ${config.apiKey}`
+
+  const payload = {
+    model: config.model,
+    messages: [...messages, { role: 'system', content: THINK_ONLY_PROMPT[mode] }],
+    temperature: config.temperature,
+    max_tokens: Math.min(config.maxTokens, 8192),
+    top_p: config.topP,
+    presence_penalty: config.presencePenalty,
+    frequency_penalty: config.frequencyPenalty,
+    stream: true,
+  }
+
+  const upstream = await fetch(`${base}/chat/completions`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(payload),
+    signal,
+  })
+  if (!upstream.ok || !upstream.body) {
+    const text = await upstream.text().catch(() => '')
+    throw new Error(`think_phase_${upstream.status}: ${text.slice(0, 200)}`)
+  }
+
+  const reader = upstream.body.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ''
+  let thinking = ''
+  let done = false
+
+  const handleLine = (line: string) => {
+    const trimmed = line.trim()
+    if (!trimmed.startsWith('data:')) return
+    const dataStr = trimmed.slice(5).trim()
+    if (dataStr === '[DONE]') {
+      done = true
+      return
+    }
+    try {
+      const parsed = JSON.parse(dataStr) as {
+        choices?: Array<{
+          delta?: { content?: string; reasoning_content?: string; reasoning?: string }
+          message?: { content?: string; reasoning_content?: string; reasoning?: string }
+        }>
+      }
+      const choice = parsed.choices?.[0]
+      const piece =
+        choice?.delta?.content ??
+        choice?.delta?.reasoning_content ??
+        choice?.delta?.reasoning ??
+        choice?.message?.content ??
+        choice?.message?.reasoning_content ??
+        choice?.message?.reasoning
+      if (piece) {
+        thinking += piece
+        send({ choices: [{ delta: { reasoning_content: piece } }] })
+      }
+    } catch {
+      /* skip */
+    }
+  }
+
+  while (!done) {
+    const { done: readerDone, value } = await reader.read()
+    if (readerDone) {
+      buffer += decoder.decode()
+      break
+    }
+    buffer += decoder.decode(value, { stream: true })
+    const lines = buffer.split('\n')
+    buffer = lines.pop() ?? ''
+    for (const line of lines) handleLine(line)
+  }
+  if (!done && buffer.trim()) handleLine(buffer)
+
+  return thinking
+}
+
+function buildAnswerMessages(
+  apiMessages: ChatCompletionMessage[],
+  thinking: string,
+  mode: Exclude<ThinkMode, 'off'>,
+): ChatCompletionMessage[] {
+  if (!thinking.trim()) return apiMessages
+  return [
+    ...apiMessages,
+    {
+      role: 'system',
+      content:
+        mode === 'deep'
+          ? `Your prior deep thinking:\n\n${thinking}\n\nNow write only the final answer for the user. Do not repeat the full reasoning; use it to produce a clear, complete answer.`
+          : `Your prior thinking:\n\n${thinking}\n\nNow write only the final answer for the user. Do not repeat the full reasoning; use it to produce a clear answer.`,
+    },
+  ]
+}
+
 aiRouter.post('/stream', async (req, res) => {
   const config = getConfig()
-  const { messages, webSearch: enableSearch, deepThink } = req.body as {
+  const { messages, webSearch: enableSearch, deepThink, thinkingMode } = req.body as {
     messages?: Message[]
     webSearch?: boolean
     deepThink?: boolean
+    thinkingMode?: ThinkMode | boolean
   }
+  const thinkMode = normalizeThinkMode(thinkingMode, deepThink)
 
   if (!Array.isArray(messages) || messages.length === 0) {
     res.status(400).json({ error: 'messages array is required', type: 'unknown' })
@@ -78,7 +220,7 @@ aiRouter.post('/stream', async (req, res) => {
   }
 
   const apiMessages = await buildApiMessages(messages, config.systemPrompt, {
-    deepThink: Boolean(deepThink),
+    thinkMode: 'off',
     searchContext,
   })
   const useStream = config.stream !== false
@@ -107,8 +249,27 @@ aiRouter.post('/stream', async (req, res) => {
   req.on('close', () => abort.abort())
   let timeout: NodeJS.Timeout | undefined
 
-  if (deepThink) {
-    await waitThink(randomThinkMs(), abort.signal)
+  let answerMessages = apiMessages
+  if (thinkMode !== 'off') {
+    const thinkMs = randomThinkMs(thinkMode)
+    send({ thinking: { mode: thinkMode, durationMs: thinkMs, startedAt: Date.now() } })
+    const started = Date.now()
+    let thinking = ''
+    try {
+      thinking = await streamThinkPhase(config, apiMessages, thinkMode, send, abort.signal)
+    } catch (err) {
+      if (abort.signal.aborted || (err instanceof Error && err.name === 'AbortError')) {
+        if (!res.writableEnded) {
+          res.write('data: [DONE]\n\n')
+          res.end()
+        }
+        return
+      }
+    }
+    if (!abort.signal.aborted) {
+      const left = thinkMs - (Date.now() - started)
+      if (left > 0) await waitThink(left, abort.signal)
+    }
     if (abort.signal.aborted) {
       if (!res.writableEnded) {
         res.write('data: [DONE]\n\n')
@@ -116,12 +277,15 @@ aiRouter.post('/stream', async (req, res) => {
       }
       return
     }
+    const actualMs = Date.now() - started
+    send({ thinking: { mode: thinkMode, durationMs: actualMs, startedAt: started, done: true } })
+    answerMessages = buildAnswerMessages(apiMessages, thinking, thinkMode)
   }
 
   try {
     const payload: Record<string, unknown> = {
       model: config.model,
-      messages: apiMessages,
+      messages: answerMessages,
       temperature: config.temperature,
       max_tokens: config.maxTokens,
       top_p: config.topP,
@@ -147,7 +311,7 @@ aiRouter.post('/stream', async (req, res) => {
 
     const buildContinuePayload = (): Record<string, unknown> => ({
       ...payload,
-      messages: [...apiMessages, { role: 'assistant', content: accumulated }],
+      messages: [...answerMessages, { role: 'assistant', content: accumulated }],
     })
 
     while (continues < MAX_CONTINUE) {
@@ -297,12 +461,13 @@ aiRouter.post('/stream', async (req, res) => {
 async function buildApiMessages(
   messages: Message[],
   systemPrompt: string,
-  opts: { deepThink: boolean; searchContext: string | null },
+  opts: { thinkMode: ThinkMode; searchContext: string | null },
 ): Promise<ChatCompletionMessage[]> {
   const out: ChatCompletionMessage[] = []
   const systems: string[] = []
   if (systemPrompt.trim()) systems.push(systemPrompt)
-  if (opts.deepThink) systems.push(DEEP_THINK_PROMPT)
+  if (opts.thinkMode === 'deep') systems.push(DEEP_THINK_PROMPT)
+  else if (opts.thinkMode === 'normal') systems.push(NORMAL_THINK_PROMPT)
   if (systems.length) out.push({ role: 'system', content: systems.join('\n\n') })
 
   const lastIndex = messages.length - 1
