@@ -8,11 +8,20 @@ import { Check, Copy, Download } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useSettings } from '@/contexts/SettingsContext'
 
+function extractCodeText(node: unknown): string {
+  if (typeof node === 'string') return node
+  if (Array.isArray(node)) return node.map(extractCodeText).join('')
+  if (node && typeof node === 'object' && 'props' in node) {
+    return extractCodeText((node as { props?: { children?: unknown } }).props?.children)
+  }
+  return ''
+}
+
 function CodeBlock({ className, children, ...props }: React.HTMLAttributes<HTMLPreElement>) {
   const [copied, setCopied] = React.useState(false)
   const match = /language-(\w+)/.exec(className || '')
   const lang = match?.[1]
-  const code = String(children).replace(/\n$/, '')
+  const code = extractCodeText(children).replace(/\n$/, '')
 
   const copy = async () => {
     await navigator.clipboard.writeText(code)
