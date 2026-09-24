@@ -5,5 +5,5 @@ dist
 database/
 *.log
 *.tsbuildinfo
-
-
+main.py
+bale.md
